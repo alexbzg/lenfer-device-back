@@ -64,8 +64,8 @@ while True:
     led.value(not led.value())
     ds.convert_temp()
     sleep_ms(750)
-    for c in range(len(roms)):
-        DATA['ow'][c] = int(ds.read_temp(roms[c]))
+    for c, rom in enumerate(roms):
+        DATA['ow'][c] = int(ds.read_temp(rom))
     bme = BME280.BME280(i2c=i2c)
     DATA['bme']['pressure'] = int((bme.read_pressure() // 256) * 0.0075)
     DATA['bme']['temperature'] = int(bme.read_temperature() / 100)
