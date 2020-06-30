@@ -103,6 +103,7 @@ class Device:
     if not little_endian:
       result = ((result << 8) & 0xFF00) + (result >> 8)
     return result
+    
 
   def readS16(self, register, little_endian=True):
     """Read a signed 16-bit value from the specified register, with the

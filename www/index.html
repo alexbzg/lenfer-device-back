@@ -61,7 +61,6 @@
 		background-position: 0px 100px ;
 	}
 
-
 	.wrapper{
 		width: 100%;
 		height: 100%;
@@ -114,7 +113,9 @@
 		return {
 			state: null,
 			load() {
-				fetch('/data.json')
+				fetch('/api/data', {
+					cache: "no-cache"
+				})
 					.then(res => res.json())
 					.then(data => {
 						this.state = data;
@@ -132,14 +133,9 @@
 						this.data = data;
 					})
 			},
-			post(path, data) {
-				data = data.map(item => +item);
-				const post_data = Object.assign({}, path);
-				let low_level = post_data;
-				while (low_level[Object.keys(low_level)[0]]) {
-					low_level = low_level[Object.keys(low_level)[0]]
-				}
-				low_level[Object.keys(low_level)[0]] = data
+			post(type, data) {
+				post_data = {}
+				post_data[type] = data.map(item => +item.toString().replace(',', '.'));
 				fetch('/api/limits', {
 					method: 'POST',
 					headers: {
@@ -164,25 +160,17 @@
 	<tr>
 		<td><div class="icon temp"></div> верх</td>
 		<td class="data" x-text="climate.state.ow[0] + '&deg;'"></td>
-		<td class="interval" id="change_temp"
-			@click="set_limits = {limits: [...limits.data.temperature[0]], path: {'temperature': {0: null}}, text: 'температуры'};">
-			<template x-if="limits.data">
-				<span>
-					<span x-text="limits.data.temperature[0][1] + '&deg;'"></span><br/>
-					<span x-text="limits.data.temperature[0][0] + '&deg;'"></span>
-				</span>
-			</template>
-		</td>
+		<td class="interval" id="change_temp"></td>
 	</tr>
 	<tr>
 		<td><div class="icon temp"></div> низ</td>
 		<td class="data" x-text="climate.state.bme.temperature + '&deg;'"></td>
 		<td class="interval" id="change_temp"
-			@click="set_limits = {limits: [...limits.data.temperature[1]], path: {'temperature': {1: null}}, text: 'температуры'};">
+			@click="set_limits = {type: 'temperature', limits: [...limits.data.temperature]};">
 			<template x-if="limits.data">				
 				<span>
-					<span x-text="limits.data.temperature[1][1] + '&deg;'"></span><br/>
-					<span x-text="limits.data.temperature[1][0] + '&deg;'"></span>
+					<span x-text="limits.data.temperature[1] + '&deg;'"></span><br/>
+					<span x-text="limits.data.temperature[0] + '&deg;'"></span>
 				</span>
 			</template>
 		</td>
@@ -191,7 +179,7 @@
 		<td><div class="icon humidity"></div> низ</td>
 		<td class="data" x-text="climate.state.bme.humidity + '%'"></td>
 		<td class="interval" id="change_humidity"
-			@click="set_limits = {limits: [...limits.data.humidity], path: {'humidity': null}, text: 'влажности'};">
+			@click="set_limits = {type: 'humidity', limits: [...limits.data.humidity]};">
 			<template x-if="limits.data">
 				<span>
 					<span x-text="limits.data.humidity[1] + '%'"></span><br/>
@@ -212,12 +200,14 @@
 <template x-if="set_limits">
 	<div class="wrapper" id="set_limits_window">
 		<div class="set_data_form">
-			<span x-text="'Верхний предел ' + set_limits.text"></span><br/>
+			<span x-text="'Верхний предел ' + (set_limits.type == 'temperature' ? 'температуры' : 'влажности')"></span><br/>
 			<input class="" type="text" x-model="set_limits.limits[1]"><br/>
-			<span x-text="'Нижний предел ' + set_limits.text"></span><br/>
+			<span x-text="'Нижний предел ' + (set_limits.type == 'temperature' ? 'температуры' : 'влажности')"></span><br/>
 			<input class="" type="text" x-model="set_limits.limits[0]"><br/>
 			<button class="cancel" id="close_temp_window" @click="set_limits = null">Отмена</button>
-			<button class="confirm" id="ok_temp_window" @click="limits.post(set_limits.path, set_limits.limits); set_limits = null;">OK</button>
+			<button class="confirm" id="ok_temp_window" @click="limits.post(set_limits.type, set_limits.limits); set_limits = null;">
+				OK
+			</button>
 		</div>
 	</div>
 </template>
