@@ -126,31 +126,35 @@
 	function limits() {
 		return {
 			data: null,
+			update(res) {
+				res.json()
+					.then(data => {this.data = data;});
+			},
 			load() {
-				fetch('/limits.json')
-					.then(res => res.json())
-					.then(data => {
-						this.data = data;
-					})
+				fetch('/api/limits', {
+					cache: "no-cache"
+				})
+					.then(res => { this.update(res); })
 			},
 			post(type, data) {
 				post_data = {}
 				post_data[type] = data.map(item => +item.toString().replace(',', '.'));
 				fetch('/api/limits', {
 					method: 'POST',
+					cache: "no-cache",
 					headers: {
     					'Content-Type': 'application/json',
   					},					
 					body: JSON.stringify(post_data)
 				})
-					.then(() => this.load());
+					.then(res => { this.update(res);});
 			}
 		};
 	}
 </script>
 </head>
 <body x-data="{climate: climateState(), limits: limits(), set_limits: null}" 
-	x-init="climate.load(); setInterval(() => { climate.load(); }, 30000); limits.load();"
+	x-init="climate.load(); setInterval(() => { climate.load(); }, 5000); limits.load();"
 	x-cloak>
 <div id="title">ClimatController<br/><span>v.1.0</span></div>
 

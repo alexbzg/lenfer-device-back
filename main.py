@@ -47,12 +47,16 @@ except Exception:
     export_limits()
     print('Limits file not found - create from scratch')
 
+@MicroWebSrv.route('/api/limits')
+def limits(http_client, http_response):
+    http_response.WriteResponseJSONOk(obj=LIMITS, headers={'cache-control': 'no-store'})
+
 @MicroWebSrv.route('/api/limits', 'POST')
 def edit_limits(http_client, http_response):
     req_json = http_client.ReadRequestContentAsJSON()
     LIMITS.update(req_json)
     export_limits()
-    http_response.WriteResponseOk()
+    limits(http_client, http_response)
 
 @MicroWebSrv.route('/api/data', 'GET')
 def get_data(http_client, http_response):
@@ -73,7 +77,7 @@ while True:
             ow_flag = True
         except Exception as exc:
             print('Onewire error')
-            print(exc)            
+            print(exc)         
     sleep_ms(750)
     if ow_flag:
         for c, rom in enumerate(OW_ROMS):
@@ -95,7 +99,7 @@ while True:
             elif DATA['bme']['temperature'] < DATA['ow'][0] + 1 and DATA['bme']['temperature'] > DATA['ow'][0] - 1:
                 VENT_MIX.value(0)
         else:
-            VENT_MIX.value(0)                            
+            VENT_MIX.value(0)                       
         if DATA['bme']['humidity'] > LIMITS['humidity'][1] or DATA['bme']['temperature'] > LIMITS['temperature'][1]:
             VENT_OUT.value(1)
         elif DATA['bme']['humidity'] < LIMITS['humidity'][1] - 5 and DATA['bme']['temperature'] < LIMITS['temperature'][1] - 2:
