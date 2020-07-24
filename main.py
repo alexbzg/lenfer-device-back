@@ -1,11 +1,8 @@
 from time import sleep_ms
 
-from machine import Pin, I2C
-import onewire
-import ds18x20
+from machine import WDT
 import ujson
 
-import BME280
 from microWebSrv import MicroWebSrv
 
 OW_PIN = 32

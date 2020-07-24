@@ -1,4 +1,5 @@
 import network
+import ujson
 
 NETWORK_MODE = network.AP_IF
 
