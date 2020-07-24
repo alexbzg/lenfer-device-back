@@ -1,108 +1,96 @@
 from time import sleep_ms
 
-from machine import Pin, I2C
-import onewire
-import ds18x20
+from machine import WDT
 import ujson
 
-import BME280
 from microWebSrv import MicroWebSrv
 
-OW_PIN = 32
-SCL_PIN = 26
-SDA_PIN = 14
+from climate import ClimateController
 
-HEAT_PIN = 19
-VENT_OUT_PIN = 23
-VENT_MIX_PIN = 22
+CONF = {}
+with open('conf.json', 'r') as conf_file:
+    CONF = ujson.load(conf_file)
+    print('config loaded')
 
-try:
-    
-    OW = onewire.OneWire(Pin(OW_PIN))
-    DS = ds18x20.DS18X20(OW)
-    OW_ROMS = DS.scan()
-    OW_TEMPS = [None for rom in OW_ROMS]
-except Exception as exc:
-    print('Onewire initialization failed')
-    print(exc)
+HTML_INDEX = ''
+with open('html/index', 'r') as _file:
+    HTML_INDEX = _file.read()
+    modules = {'climate': ''}
+    if CONF['climate']['enabled']:
+        with open('html/climate', 'r') as _file:
+            modules['climate'] = _file.read()
+    HTML_INDEX = HTML_INDEX % modules
 
-HEAT = Pin(HEAT_PIN, Pin.OUT)
-VENT_OUT = Pin(VENT_OUT_PIN, Pin.OUT)
-VENT_MIX = Pin(VENT_MIX_PIN, Pin.OUT)
+CLIMATE_CONTROLLER = None
+if CONF['climate']['enabled']:
+    try:
+        CLIMATE_CONTROLLER = ClimateController(CONF['climate'])
+    except Exception as exc:
+        print('Climate controller initialization error')
+        print(exc)
 
-LIMITS_PATH = 'www/limits.json'
-LIMITS = {
-    'temperature': [20, 35],
-    'humidity': [30, 60]
-}
-def export_limits():
-    with open(LIMITS_PATH, 'w') as limits_file:
-        limits_file.write(ujson.dumps(LIMITS))
+def save_conf():
+    with open('conf.json', 'w') as _conf_file:
+        _conf_file.write(ujson.dumps(CONF))
 
-try:
-    with open(LIMITS_PATH, 'r') as limits_file:
-        LIMITS = ujson.load(limits_file)
-        print('Limits file found - load')
-except Exception:
-    export_limits()
-    print('Limits file not found - create from scratch')
-
-@MicroWebSrv.route('/api/limits')
+@MicroWebSrv.route('/api/climate/limits', 'GET')
 def limits(http_client, http_response):
-    http_response.WriteResponseJSONOk(obj=LIMITS, headers={'cache-control': 'no-store'})
+    if CLIMATE_CONTROLLER:
+        http_response.WriteResponseJSONOk(obj=CLIMATE_CONTROLLER.limits,\
+            headers={'cache-control': 'no-store'})
 
-@MicroWebSrv.route('/api/limits', 'POST')
+@MicroWebSrv.route('/api/climate/limits', 'POST')
 def edit_limits(http_client, http_response):
+    if CLIMATE_CONTROLLER:
+        req_json = http_client.ReadRequestContentAsJSON()
+        CLIMATE_CONTROLLER.limits.update(req_json)
+        save_conf()
+        limits(http_client, http_response)
+
+@MicroWebSrv.route('/api/timers', 'GET')
+def timers(http_client, http_response):
+    http_response.WriteResponseJSONOk(obj=CONF['timers'],\
+        headers={'cache-control': 'no-store'})
+
+@MicroWebSrv.route('/api/timers', 'POST')
+def edit_timers(http_client, http_response):
     req_json = http_client.ReadRequestContentAsJSON()
-    LIMITS.update(req_json)
-    export_limits()
-    limits(http_client, http_response)
+    for key in req_json.keys():
+        if key == 'new':
+            CONF['timers'].append(req_json[key])
+        else:
+            CONF['timers'][int(key)] = req_json[key]
+    save_conf()
+    timers(http_client, http_response)
 
-@MicroWebSrv.route('/api/data', 'GET')
+@MicroWebSrv.route('/api/timers', 'DELETE')
+def edit_timers(http_client, http_response):
+    req_json = http_client.ReadRequestContentAsJSON()
+    del CONF['tmers'][req_json]
+    save_conf()
+    timers(http_client, http_response)
+
+@MicroWebSrv.route('/api/climate/data', 'GET')
 def get_data(http_client, http_response):
-    http_response.WriteResponseJSONOk(obj=DATA, headers={'cache-control': 'no-store'})
+    if CLIMATE_CONTROLLER:
+        http_response.WriteResponseJSONOk(obj=CLIMATE_CONTROLLER.data,\
+            headers={'cache-control': 'no-store'})
 
-srv = MicroWebSrv(webPath='www/')
+@MicroWebSrv.route('/', 'GET')
+def get_index(http_client, http_response):
+    http_response.WriteResponseOk(headers=None, contentType="text/html",\
+        contentCharset="UTF-8", content=HTML_INDEX)
+
+srv = MicroWebSrv()
 srv.Start(threaded=True)
 
-I2C_DEVICE = I2C(scl=Pin(SCL_PIN), sda=Pin(SDA_PIN), freq=10000)
-DATA = {'ow': [None for rom in OW_ROMS],
-        'bme': {'pressure': None, 'temperature': None, 'humidity': None}}
+DEV_WDT = WDT(timeout=5000)
 
 while True:
-    ow_flag = False
-    if OW:
-        try:
-            DS.convert_temp()
-            ow_flag = True
-        except Exception as exc:
-            print('Onewire error')
-            print(exc)         
-    sleep_ms(750)
-    if ow_flag:
-        for c, rom in enumerate(OW_ROMS):
-            DATA['ow'][c] = round(DS.read_temp(rom), 1)
     try:
-        bme = BME280.BME280(i2c=I2C_DEVICE)
-        DATA['bme']['pressure'] = int((bme.read_pressure() // 256) * 0.0075)
-        DATA['bme']['temperature'] = round((bme.read_temperature() / 100), 1)
-        DATA['bme']['humidity'] = int(bme.read_humidity() // 1024)
-        with open('www/data.json', 'w') as jsonf:
-            print(ujson.dumps(DATA))
-        if DATA['bme']['temperature'] < LIMITS['temperature'][0]:
-            HEAT.value(1)
-        elif DATA['bme']['temperature'] > LIMITS['temperature'][0] + 2:
-            HEAT.value(0)
-        if ow_flag:
-            if DATA['bme']['temperature'] > DATA['ow'][0] + 3 or DATA['bme']['temperature'] < DATA['ow'][0] - 3:
-                VENT_MIX.value(1)
-            elif DATA['bme']['temperature'] < DATA['ow'][0] + 1 and DATA['bme']['temperature'] > DATA['ow'][0] - 1:
-                VENT_MIX.value(0)
+        if CLIMATE_CONTROLLER:
+            CLIMATE_CONTROLLER.read()
         else:
-            VENT_MIX.value(0)                       
-        if DATA['bme']['humidity'] > LIMITS['humidity'][1] or DATA['bme']['temperature'] > LIMITS['temperature'][1]:
-            VENT_OUT.value(1)
-        elif DATA['bme']['humidity'] < LIMITS['humidity'][1] - 5 and DATA['bme']['temperature'] < LIMITS['temperature'][1] - 2:
-            VENT_OUT.value(0)
-    except Exception as exc:
-        print(exc)
+            sleep_ms(CONF['sleep'])
+    finally:
+        DEV_WDT.feed()

@@ -1,13 +1,20 @@
 import network
+import ujson
 
-NETWORK_MODE = network.AP_IF
+CONF = {}
+with open('conf.json', 'r') as conf_file:
+    CONF = ujson.load(conf_file)
+    print('config loaded')
 
-if NETWORK_MODE == network.AP_IF:
+if CONF['network']['mode'] == 'AP':
+    NETWORK_MODE = network.AP_IF
     AP = network.WLAN(network.AP_IF)
-    AP.config(essid="Brooder", password="rytqcypz", authmode=4)
-    AP.ifconfig(("192.168.0.1", "255.255.255.0", "192.168.0.1", "192.168.0.1"))
+    AP.config(essid=CONF['network']['essid'], password=CONF['network']['password'],\
+        authmode=CONF['network']['authmode'])
+    AP.ifconfig((CONF['network']['address'], CONF['network']['mask'],\
+        CONF['network']['address'], CONF['network']['address']))
     AP.active(True)
 else:
     nic = network.WLAN(network.STA_IF)
     nic.active(True)
-    nic.connect('R7AB_office', '18231824')    
+    nic.connect(CONF['network']['essid'], CONF['network']['password'])
