@@ -1,5 +1,4 @@
 from time import sleep_ms
-<<<<<<< HEAD
 
 from machine import Pin, I2C
 import onewire
@@ -67,5 +66,3 @@ class ClimateController:
                 self.vent_out.value(0)
         except Exception as exc:
             print(exc)
-=======
->>>>>>> 5c881bfcca8cc76e21627ce13b9edb441a70fda1
