@@ -1,0 +1,109 @@
+<div>
+    <script>
+        function climateState() {
+            return {
+                state: null,
+                load() {
+                    fetch('/api/data', {
+                        cache: "no-cache"
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            this.state = data;
+                        })
+                }
+            };
+        }
+        function limits() {
+            return {
+                data: null,
+                update(res) {
+                    res.json()
+                        .then(data => {this.data = data;});
+                },
+                load() {
+                    fetch('/api/limits', {
+                        cache: "no-cache"
+                    })
+                        .then(res => { this.update(res); })
+                },
+                post(type, data) {
+                    post_data = {}
+                    post_data[type] = data.map(item => +item.toString().replace(',', '.'));
+                    fetch('/api/limits', {
+                        method: 'POST',
+                        cache: "no-cache",
+                        headers: {
+                            'Content-Type': 'application/json',
+                          },					
+                        body: JSON.stringify(post_data)
+                    })
+                        .then(res => { this.update(res);});
+                }
+            };
+        }
+    </script>
+<div 
+    x-data="{climate: climateState(), limits: limits(), set_limits: null}" 
+	x-init="climate.load(); setInterval(() => { climate.load(); }, 5000); limits.load();"
+	x-cloak>
+<div id="title">ClimatController<br/><span>v.1.0</span></div>
+ 
+<table>
+	<template x-if="climate.state">
+	<tbody>
+	<tr>
+		<td><div class="icon temp"></div> верх</td>
+		<td class="data" x-text="climate.state.ow[0] + '&deg;'"></td>
+		<td class="interval" id="change_temp"></td>
+	</tr>
+	<tr>
+		<td><div class="icon temp"></div> низ</td>
+		<td class="data" x-text="climate.state.bme.temperature + '&deg;'"></td>
+		<td class="interval" id="change_temp"
+			@click="set_limits = {type: 'temperature', limits: [...limits.data.temperature]};">
+			<template x-if="limits.data">				
+				<span>
+					<span x-text="limits.data.temperature[1] + '&deg;'"></span><br/>
+					<span x-text="limits.data.temperature[0] + '&deg;'"></span>
+				</span>
+			</template>
+		</td>
+	</tr>
+	<tr>
+		<td><div class="icon humidity"></div> низ</td>
+		<td class="data" x-text="climate.state.bme.humidity + '%'"></td>
+		<td class="interval" id="change_humidity"
+			@click="set_limits = {type: 'humidity', limits: [...limits.data.humidity]};">
+			<template x-if="limits.data">
+				<span>
+					<span x-text="limits.data.humidity[1] + '%'"></span><br/>
+					<span x-text="limits.data.humidity[0] + '%'"></span>
+				</span>
+			</template>
+		</td>
+	</tr>
+	<tr>
+		<td><div class="icon pressure"></div></td>
+		<td class="data" x-text="climate.state.bme.pressure + 'mm'"></td>
+		<td class="interval"></td>
+	</tr>
+	</tbody>
+	</template>
+</table>
+
+<template x-if="set_limits">
+	<div class="wrapper" id="set_limits_window">
+		<div class="set_data_form">
+			<span x-text="'Верхний предел ' + (set_limits.type == 'temperature' ? 'температуры' : 'влажности')"></span><br/>
+			<input class="" type="text" x-model="set_limits.limits[1]"><br/>
+			<span x-text="'Нижний предел ' + (set_limits.type == 'temperature' ? 'температуры' : 'влажности')"></span><br/>
+			<input class="" type="text" x-model="set_limits.limits[0]"><br/>
+			<button class="cancel" id="close_temp_window" @click="set_limits = null">Отмена</button>
+			<button class="confirm" id="ok_temp_window" @click="limits.post(set_limits.type, set_limits.limits); set_limits = null;">
+				OK
+			</button>
+		</div>
+	</div>
+</template>
+</div>

@@ -1,0 +1,712 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<script src="/alpine.min.js" defer></script>
+<link rel="stylesheet" href="style_mobile.css" type="text/css">
+<script>
+	function wlanSettings() {
+		return {
+			data: null,
+			show: false,
+			load() {
+				fetch('/api/settings/wlan', {
+					cache: "no-cache"
+				})
+					.then(res => res.json())
+					.then(data => {
+						this.data = data;
+					})
+			},
+			post() {
+				fetch('/api/settings/wlan', {
+					method: 'POST',
+					cache: "no-cache",
+					headers: {
+    					'Content-Type': 'application/json',
+  					},					
+					body: JSON.stringify(this.data)
+				})				
+			}
+		};
+	}
+	function wlanScan() {
+		return {
+			data: null,
+			load() {
+				fetch('/api/settings/wlan/scan', {
+					cache: "no-cache"
+				})
+					.then(res => res.json())
+					.then(data => {
+						this.data = data;
+					})
+			}
+		};
+	}
+</script>
+</head>
+<body x-data="{wlanSettings: wlanSettings(), wlanScan: wlanScan()}" 
+	x-init="wlanSettings.load(); wlanScan.load();"
+	x-cloak>
+
+<div id="title">
+	<img id="setup_link" src="images/icon_setup.png" @click="wlanSettings.show = !wlanSettings.show">
+	ClimatController<br/><span>v.1.0</span>
+</div>
+
+<div id="setup_block" x-show="wlanSettings.show">
+	<input type="text" name="" x-model="wlanSettings.name"><br/>
+	название устройства и его WiFi-точки<br/>
+	<input type="text" name="" x-model="wlanSettings.ap_key"><br/>
+	пароль доступа к устройству<br/>
+	<div class="note">Если вы измените название/пароль устройства, после сохранения настроек устройство перезагрузится, и вам нужно будет заново подключиться к WiFi-точке устройства. Уже с новым именем или паролем.</div>
+	<br/>
+	<br/>
+	<br/>
+	<h3>Подключение к WiFi сети</h3>
+	<select type="text" name="" x-model="wlanSettings.ssid">
+		<template x-for="wlan in wlanScan.data" :key="">
+			<option x-text="wlan" :value="wlan"></option>
+		</template>
+	</select>
+	<br/>
+	название WiFi сети<br/>
+	<input type="text" name="" x-model="wlanSettings.key"><br/>
+	пароль<br/>
+	<br/>
+	<br/>
+	<br/>
+	<!--
+	<h3>Подключение к ClimatController.ru</h3>
+	<input type="text" name="" value=""><br/>
+	логин<br/>
+	<input type="text" name="" value=""><br/>
+	пароль
+	-->
+	<!--
+	<div id="time_setup">
+		<h3>Установка даты и времени</h3>
+		<select>
+			<option selected>1</option>
+			<option>2</option>
+			<option>3</option>
+			<option>4</option>
+			<option>5</option>
+			<option>6</option>
+			<option>7</option>
+			<option>8</option>
+			<option>9</option>
+			<option>10</option>
+			<option>11</option>
+			<option>12</option>
+			<option>13</option>
+			<option>14</option>
+			<option>15</option>
+			<option>16</option>
+			<option>17</option>
+			<option>18</option>
+			<option>19</option>
+			<option>20</option>
+			<option>21</option>
+			<option>22</option>
+			<option>23</option>
+			<option>24</option>
+			<option>25</option>
+			<option>26</option>
+			<option>27</option>
+			<option>28</option>
+			<option>29</option>
+			<option>30</option>
+			<option>31</option>
+		</select>
+		<select>
+			<option selected>январь</option>
+			<option>февраль</option>
+			<option>март</option>
+			<option>апрель</option>
+			<option>май</option>
+			<option>июнь</option>
+			<option>июль</option>
+			<option>август</option>
+			<option>сентябрь</option>
+			<option>октябрь</option>
+			<option>ноябрь</option>
+			<option>декабрь</option>
+		</select>
+		<select>
+			<option selected>2020</option>
+			<option>2021</option>
+			<option>2022</option>
+			<option>2023</option>
+			<option>2024</option>
+			<option>2025</option>
+			<option>2026</option>
+			<option>2027</option>
+			<option>2028</option>
+			<option>2029</option>
+			<option>2030</option>
+		</select>
+		<br/>
+		<select>
+			<option selected>0</option>
+			<option>1</option>
+			<option>2</option>
+			<option>3</option>
+		</select> :
+		<select>
+			<option selected>0</option>
+			<option>1</option>
+			<option>2</option>
+			<option>3</option>
+		</select>
+	</div>
+-->
+
+	<button id="ok_setup_window" @click="wlanSettings.post()">Сохранить настройки</button>
+</div>
+
+
+
+
+<div id="top_info_block">
+	<div id="current_time">
+		15 июля 2020 <span>12:31</span>
+	</div>
+</div>
+
+
+
+
+<div id="data_block">
+
+	<table id="climat_data">
+		<tr>
+			<td class="icon"><img src="images/icon_temp.png"><br/>верх</td>
+			<td class="data">37.6&deg;</td>
+			<td class="interval"></td>
+		</tr>
+		<tr>
+			<td class="icon"><img src="images/icon_temp.png"><br/>низ</td>
+			<td class="data">36.2&deg;</td>
+			<td class="interval" id="change_temp">37.5&deg;</td>
+		</tr>
+		<tr>
+			<td class="icon"><img src="images/icon_hum.png"><br/>низ</td>
+			<td class="data">43%</td>
+			<td class="interval" id="change_humidity">60%</td>
+		</tr>
+		<tr>
+			<td class="icon"><img src="images/icon_press.png"><br/></td>
+			<td class="data">755</td>
+			<td class="interval"></td>
+		</tr>
+	</table>
+
+	<div class="view_period stadart">
+		<span class="time_on">10:00:00</span><br/>
+		<span class="time_off">10:00:30</span>
+	</div>
+
+	<div id="add_period_link">Добавить период</div>
+
+</div>
+
+
+<div class="wrapper" id="set_temp_window" style="display:none;">
+	<div class="set_data_form">
+		<span>Необходимая температура, &plusmn;0.1&deg;</span>
+		<input class="" type="text" name=""><br/>
+		<button class="cancel" id="close_temp_window">Отмена</button><button class="confirm" id="ok_temp_window">OK</button>
+	</div>
+</div>
+<div class="wrapper" id="set_humidity_window" style="display:none;">
+	<div class="set_data_form">
+		<span>Необходимая влажность, &plusmn;10%</span>
+		<input class="" type="text" name=""><br/>
+		<button class="cancel" id="close_humidity_window">Отмена</button><button class="confirm" id="ok_humidity_window">OK</button>
+	</div>
+</div>
+
+
+<br/><br/><br/><br/><br/><br/><br/><br/>
+
+
+
+<div id="data_block">
+
+	<div class="view_period stadart" id="pediod1">
+		<span class="time_on">10:00:00</span><br/>
+		<span class="time_off">10:00:30</span>
+	</div>
+	<div class="view_period interval">
+		<span class="time_on">10:00:00</span><br/>
+		<span class="time_every">00:01:00</span><br/>
+		<span class="time_work">00:00:05</span><br/>
+		<span class="time_off">19:00:20</span>
+	</div>
+	<div class="view_period sunrise">
+
+	</div>
+
+	<div id="add_period_link">Добавить период</div>
+
+</div>
+
+
+<div class="wrapper" id="set_period" style="display:none;">
+	<div class="set_period_form">
+		<div id="top_menu">
+			<div id="standart"><img src="images/timer_icon1.png"><br/>стандарт</div>
+			<div id="interval" class="active"><img src="images/timer_icon2.png"><br/>интервал</div>
+			<div id="sunrise"><img src="images/timer_icon3.png"><br/>восход</div>
+		</div>
+
+		<div id="standart_form" class="set_time_form">
+			<table>
+				<tr>
+					<td colspan="3" class="title">ВКЛЮЧИТЬ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ВЫКЛЮЧИТЬ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option selected>10</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+			</table>
+
+
+		</div>
+
+<Br/><Br/><Br/><Br/>
+
+
+		<div id="interval_form" class="set_time_form">
+			<table>
+				<tr>
+					<td colspan="3" class="title">НАЧАЛО РАБОТЫ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option selected>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ОКОНЧАНИЕ РАБОТЫ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+			</table>
+		</div>
+
+
+<Br/><Br/><Br/><Br/>
+
+		<div id="sunrise_form" class="set_time_form">
+
+			<table>
+				<tr>
+					<td class="title">ШИРОТА</td>
+					<td>&nbsp;</td>
+					<td class="title">ДОЛГОТА</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+					<td>&nbsp;</td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+			</table>
+
+
+			<table>
+				<tr>
+					<td colspan="3" class="title">К ВОСХОДУ СОЛНЦА</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>+</option>
+							<option>-</option>
+						</select>
+					</td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+								<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text"></td>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>00</option>
+							<option selected>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+					<select>
+							<option selected>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select><span>:</span></td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+					<td class="bottom_text">сек</td>
+				</tr>
+				<tr>
+					<td colspan="3" class="title">К ЗАХОДУ СОЛНЦА</td>
+				</tr>
+				<tr>
+					<td>
+						<select>
+							<option>+</option>
+							<option>-</option>
+						</select>
+					</td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+								<option>03</option>
+						</select><span>:</span>
+					</td>
+					<td>
+						<select>
+							<option>00</option>
+							<option>01</option>
+							<option>02</option>
+							<option>03</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="bottom_text"></td>
+					<td class="bottom_text">час</td>
+					<td class="bottom_text">мин</td>
+				</tr>
+			</table>
+
+		</div>
+
+		<button class="delete" id="delete_period">Удалить этот период</button><br/>
+		<button class="cancel" id="close_period">Отмена</button><button class="confirm" id="ok_period">OK</button>
+	</div>
+</div>
+
+
+<script>
+
+  pediod1.onclick = function(event) {
+    document.getElementById('set_period').style.display="block";
+  }
+  delete_period.onclick = function(event) {
+    document.getElementById('set_period').style.display="none";
+  }
+  close_period.onclick = function(event) {
+    document.getElementById('set_period').style.display="none";
+  }
+  ok_period.onclick = function(event) {
+    document.getElementById('set_period').style.display="none";
+  }
+
+
+
+</script>
+
+
+
+
+
+<script>
+  setup_link.onclick = function(event) {
+    document.getElementById('setup_block').style.display = (document.getElementById('setup_block').style.display == 'none') ? 'block' : 'none'
+    document.getElementById('data_block').style.display = (document.getElementById('data_block').style.display == 'none') ? 'block' : 'none'
+  }
+  ok_setup_window.onclick = function(event) {
+    document.getElementById('setup_block').style.display="none";
+    document.getElementById('data_block').style.display = "block";
+  }
+
+
+  change_temp.onclick = function(event) {
+    document.getElementById('set_temp_window').style.display="block";
+  }
+  close_temp_window.onclick = function(event) {
+    document.getElementById('set_temp_window').style.display="none";
+  }
+  ok_temp_window.onclick = function(event) {
+    document.getElementById('set_temp_window').style.display="none";
+  }
+
+  change_humidity.onclick = function(event) {
+    document.getElementById('set_humidity_window').style.display="block";
+  }
+  close_humidity_window.onclick = function(event) {
+    document.getElementById('set_humidity_window').style.display="none";
+  }
+  ok_humidity_window.onclick = function(event) {
+    document.getElementById('set_humidity_window').style.display="none";
+  }
+
+
+</script>
+
+
+
+</html>

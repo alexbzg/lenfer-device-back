@@ -1,0 +1,345 @@
+[x-cloak] {
+	display: none;
+}
+
+body, html {
+	font-family: Arial;
+	text-align: center;
+	font-size: 18px;
+	background-color: #fff;
+	color: #333;
+	padding: 0;
+	margin: 0;
+	line-height: 18px;
+}
+
+
+input, select{
+	padding: 5px;
+	font-size: 24px;
+	font-weight: bold;
+	text-align: center;
+	border: 1px solid #ddd;
+	background-color: #fff;
+}
+
+button{
+	font-size: 18px;
+	width: 100px;
+	font-weight: bold;
+	padding: 10px;
+	border: none;
+	border-radius: 10px;
+}
+button.cancel{
+	float: left;
+	background-color: #900;
+	color: #fff;
+}
+button.confirm{
+	float: right;
+	background-color: #090;
+	color: #fff;
+}
+button.delete{
+	width: 300px;
+	color: #333;
+	background-color: #f9f9f9;
+	border: 1px solid #777;
+	margin: 30px 0;
+}
+
+
+
+
+#title{
+	font-size: 24px;
+	font-weight: bold;
+	color: #fff;
+	background-color: #005295;
+	padding: 10px 0 0 0;
+	position: relative;
+}
+#title span{
+	font-size: 12px;
+	color: #ccc;
+	font-weight: normal;
+	font-style: italic;
+}
+
+#setup_link{
+	position: absolute;
+	top: 10px;
+	right: 10px;
+}
+
+
+
+
+
+
+/* ======================================   S E T T I N G S ====================================  */
+
+
+
+#setup_block{
+	background-color: #fff;
+	padding: 20px 10px;
+	color: #999;
+	font-size: 12px;
+}
+#setup_block h3{
+	font-size: 18px;
+	margin: 10px 0 0px 0;
+	padding: 0;
+	font-weight: bold;
+	color: #009;
+}
+#setup_block input{
+	width: 90%;
+	margin-top: 10px;
+}
+.note{
+	font-style: italic;
+	font-size: 14px;
+	color: #900;
+	background-color: #fefeea;
+	border: 1px solid #900;
+	border-radius: 5px;
+	padding: 5px;
+}
+#time_setup{
+	margin: 50px 0;
+	font-size: 24px;
+	color: #000;
+}
+#time_setup select{
+	margin: 10px 0;
+}
+
+#setup_block button{
+	width: 90%;
+	background-color: #090;
+	color: #fff;
+}
+
+
+
+
+
+
+
+
+
+
+/*  ===================================  C L I M A T E   V I E W  =====================================   */
+
+
+#current_time{
+	margin: 20px 0;
+}
+
+table#climat_data{
+	margin: 30px auto 0 auto;
+	border-collapse: collapse;
+}
+table#climat_data td{
+	padding: 10px 0px 10px 10px;
+	vertical-align: bottom;
+	text-align: center;
+	font-size: 12px;
+}
+table#climat_data td.icon{
+	line-height: 10px;
+	color: #999;
+	padding-top: 15px;
+}
+table#climat_data td.data{
+	font-weight: bold;
+	font-size: 48px;
+	vertical-align: middle;
+	padding: 10px 30px;
+	color: #005295;
+}
+table#climat_data td.interval{
+	font-weight: bold;
+	font-size: 18px;
+	vertical-align: middle;
+	color: #999;
+	padding: 10px 0px;
+}
+
+
+/*  ===================================  T I M E R   V I E W  =====================================   */
+
+.view_period{
+	padding: 20px;
+	font-size: 40px;
+	line-height: 40px;
+	font-weight: bold;
+	color: #005295;
+	cursor: pointer;
+}
+.time_note{
+	font-size: 10px;
+	font-weight: normal;
+	color: #999;
+}
+.view_period .time_off{
+	color: #933;
+}
+.view_period .time_every, .view_period .time_work {
+	color: #777;
+	font-weight: normal;
+	font-size: 24px;
+}
+
+.view_period.interval {
+	line-height: 30px;
+}
+
+
+
+
+
+#add_period_link{
+	margin: 30px;
+	color: #999;
+	text-decoration: underline;
+	font-size: 14px;
+}
+
+
+
+
+
+
+
+/*  ===================================  W R A P P E R =====================================   */
+
+.wrapper{
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	background-color: rgba(255, 255, 255, 0.9);
+	position: absolute;
+	top: 0;
+	left: 0;
+}
+
+
+.set_data_form{
+	width: 70%;
+	background-color: #fff;
+	border: 1px solid #777;
+	border-radius: 10px;
+	margin: 150px auto;
+	padding: 20px 10px 50px 10px;
+	font-size: 14px;
+}
+
+.set_data_form input{
+	margin-bottom: 50px;
+	margin-top: 10px;
+	padding: 5px;
+	font-size: 24px;
+	width: 90%;
+	font-weight: bold;
+	border: none;
+	border-bottom: 1px solid #ccc;
+	border-radius: 5px;
+	text-align: center;
+}
+.set_data_form span{
+	display: block;
+	width: 90%;
+	margin: 0 auto;
+	background-color: #005295;
+	color: #fff;
+	padding: 5px;
+}
+
+
+
+
+
+
+/*  ===================================  S E T   P E R I O D =====================================   */
+
+.set_period_form{
+	width: 80%;
+	background-color: #fff;
+	border: 1px solid #999;
+	border-radius: 10px;
+	margin: 50px auto;
+	padding: 20px 10px 70px 10px;
+	font-size: 14px;
+	line-height: 14px;
+	color: #333;
+}
+
+.set_period_form #top_menu{
+	margin-bottom: 30px;
+}
+.set_period_form #top_menu div{
+	display: inline-block;
+	margin: 0 5px;
+	padding: 10px;
+	font-weight: bold;
+	border: 1px solid #ccc;
+	border-radius: 5px;
+	background-color: #f5f5f5;
+}
+.set_period_form #top_menu div.active{
+	background-color: #fff;
+}
+
+
+.set_period_form table{
+	border-collapse: collapse;
+	margin: 0 auto 30px auto;
+}
+.set_period_form td{
+	padding: 0;
+	text-align: left;
+	font-size: 24px;
+	font-weight: bold;
+}
+.set_period_form td.title{
+	font-size: 12px;
+	padding: 3px;
+	background-color: #005295;
+	color: #fff;
+	text-align: center;
+	font-weight: normal;
+}
+.set_period_form td select{
+	margin-top: 5px;
+}
+.set_period_form td span{
+	padding: 0 5px;
+}
+.set_period_form td.bottom_text{
+	font-size: 10px;
+	font-style: italic;
+	font-weight: normal;
+	color: #999;
+	text-align: center;
+	padding-bottom: 20px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
