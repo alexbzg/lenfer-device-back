@@ -3,31 +3,130 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-<script src="/alpine.min.js" defer></script>
-<link rel="stylesheet" href="style_mobile.css" type="text/css">
+<script src="/static/alpine.min.js" defer></script>
+<link rel="stylesheet" href="/static/style_mobile.css" type="text/css">
 <script>
-	function wlanSettings() {
+	function zeropad(val) {
+		return val < 10 ? '0' + val : val.toString();
+	}
+	function time_options() {
+
+		function generate(range, shift=0, pad=true) {
+			return [...Array(range).keys()].map(item => pad ? zeropad(item + shift) : item + shift)
+		}
+
 		return {
-			data: null,
-			show: false,
-			load() {
-				fetch('/api/settings/wlan', {
-					cache: "no-cache"
-				})
-					.then(res => res.json())
-					.then(data => {
-						this.data = data;
+			hr: generate(24),
+			ms: generate(60),
+			days: generate(31, 1, false),
+			years: generate(50, 2020)
+		}
+	}
+	const months_genitive = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", 
+		"сентября", "октября", "ноября", "декабря"];
+	function wlan_settings() {
+		return {
+				data: null,
+				load() {
+					fetch('/api/settings/wlan', {
+						cache: "no-cache"
 					})
-			},
+						.then(res => res.json())
+						.then(data => {
+							this.data = data;
+						})
+				},
+				post(data) {
+					let modified = false;
+					for (const field in data) {
+						if (data[field] != this.data[field]) {
+							modified = true;
+							break;
+						}
+					}
+					if (modified)
+						fetch('/api/settings/wlan', {
+							method: 'POST',
+							cache: "no-cache",
+							headers: {
+								'Content-Type': 'application/json',
+							},					
+							body: JSON.stringify(this.data)
+						})
+							.then(() => {
+								alert("Устройство будет перезагружено.")
+							})				
+				}
+			}
+	}
+	function datetime_settings () {
+		return {
+				data: null,
+				date_text: "",
+				time_text: "",
+				update(res) {
+					res.json()
+						.then(data => {
+							this.data = data;
+							this.date_text = `${this.data[2]} ${months_genitive[this.data[1]]} ${this.data[0]}`;
+							this.time_text = `${zeropad(this.data[4])}:${zeropad(this.data[5])}`;
+						});   				
+				},
+				load() {
+					fetch('/api/time', {
+						cache: "no-cache"
+					})
+						.then(res => { this.update(res); });
+				},
+				post(data) {
+					const dt_length = 6;
+					let modified = false;
+					data = data.map(item => Number(item));
+					for (let co=0; !modified && co < dt_length; co++)
+						modified = data[co] != this.data[co];
+					if (modified)
+						fetch('/api/time', {
+							method: 'POST',
+							cache: "no-cache",
+							headers: {
+								'Content-Type': 'application/json',
+							},					
+							body: JSON.stringify(data)
+						})
+							.then(res => { 
+								if (res.ok)
+									this.update(res);
+								else
+									res.text()
+										.then(txt => alert(txt));
+							});
+				}
+			}		
+	}
+	function settings() {
+		return {
+			edit: null,
+			wlan: wlan_settings(),
+			datetime: datetime_settings(),
 			post() {
-				fetch('/api/settings/wlan', {
-					method: 'POST',
-					cache: "no-cache",
-					headers: {
-    					'Content-Type': 'application/json',
-  					},					
-					body: JSON.stringify(this.data)
-				})				
+				this.wlan.post(this.edit.wlan);
+				this.datetime.post(this.edit.datetime);
+			},
+			load() {
+				this.wlan.load();
+				this.datetime.load();
+			},
+			toggle_edit() {
+				if (this.edit) {
+					if (confirm("Отменить все внесенные изменения?"))
+						this.edit = null;
+				} else {
+					this.edit = {
+						wlan: JSON.parse(JSON.stringify(this.wlan.data)),
+						datetime: [this.datetime.data[0], this.datetime.data[1], this.datetime.data[2], this.datetime.data[3],
+							zeropad(this.datetime.data[4]), zeropad(this.datetime.data[5]), 0, 0]
+					}
+				}
 			}
 		};
 	}
@@ -45,139 +144,200 @@
 			}
 		};
 	}
+	function timers() {
+		return {
+			data: null,
+			active: null,
+			update(res) {
+				this.active = null;
+				res.json()
+					.then(data => {this.data = data;});   				
+			},
+			load() {
+				fetch('/api/timers', {
+					cache: "no-cache"
+				})
+					.then(res => { this.update(res); });
+			},
+			show_timer(timer_idx) {
+				if (timer_idx != -1) {
+					const timer = this.data[timer_idx];
+					this.active = {
+						idx: timer_idx, 
+						timer_type: timer.timer_type, 
+						conf: JSON.parse(JSON.stringify(timer.conf))
+					};
+				}
+				else
+					this.active = {timer_type: null, idx: -1, conf: null};
+			},
+			delete() {
+				if (confirm("Вы действительно хотите удалить этот период?"))
+					fetch('/api/timers', {
+						method: 'DELETE',
+						cache: "no-cache",
+						headers: {
+							'Content-Type': 'application/json',
+						},					
+						body: JSON.stringify(this.active.idx)
+					})
+						.then(res => { this.update(res); });
+			},
+			cancel() {
+				if (confirm("Отменить все внесенные изменения?"))
+					this.active = null;		
+			},
+			save() {
+				const key = this.active.idx === -1 ? 'new' : this.active.idx;
+				const timer = JSON.parse(JSON.stringify(this.active));
+				delete timer.idx;
+				const data = {};
+				data[key] = timer;
+				fetch('/api/timers', {
+						method: 'POST',
+						cache: "no-cache",
+						headers: {
+							'Content-Type': 'application/json',
+						},					
+						body: JSON.stringify(data)
+					})
+						.then(res => { this.update(res); });
+			},
+			set_type(timer_type) {
+				this.active.timer_type = timer_type
+				if (timer_type === 'standart')
+					this.active.conf = {
+						on: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						},
+						off: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						}
+					}
+				else if (timer_type === 'interval')
+					this.active.conf = {
+						on: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						},
+						off: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						},
+						interval_on: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						},
+						interval_off: {
+							hr: '00',
+							mn: '00',
+							sc: '00'
+						}
+					}
+			}
+		};
+	}
+	
 </script>
 </head>
-<body x-data="{wlanSettings: wlanSettings(), wlanScan: wlanScan()}" 
-	x-init="wlanSettings.load(); wlanScan.load();"
+<body x-data="{settings: settings(), wlanScan: wlanScan(), timers: timers(), time_options: time_options()}" 
+	x-init="settings.load(); wlanScan.load(); timers.load(); setInterval(() => { settings.datetime.load(); }, 30000);"
 	x-cloak>
 
 <div id="title">
-	<img id="setup_link" src="images/icon_setup.png" @click="wlanSettings.show = !wlanSettings.show">
-	ClimatController<br/><span>v.1.0</span>
+	<img id="setup_link" src="/static/images/icon_setup.png" @click="settings.toggle_edit()">
+	TimerController<br/><span>v.1.0</span>
 </div>
 
-<div id="setup_block" x-show="wlanSettings.show">
-	<input type="text" name="" x-model="wlanSettings.name"><br/>
-	название устройства и его WiFi-точки<br/>
-	<input type="text" name="" x-model="wlanSettings.ap_key"><br/>
-	пароль доступа к устройству<br/>
-	<div class="note">Если вы измените название/пароль устройства, после сохранения настроек устройство перезагрузится, и вам нужно будет заново подключиться к WiFi-точке устройства. Уже с новым именем или паролем.</div>
-	<br/>
-	<br/>
-	<br/>
-	<h3>Подключение к WiFi сети</h3>
-	<select type="text" name="" x-model="wlanSettings.ssid">
-		<template x-for="wlan in wlanScan.data" :key="">
-			<option x-text="wlan" :value="wlan"></option>
-		</template>
-	</select>
-	<br/>
-	название WiFi сети<br/>
-	<input type="text" name="" x-model="wlanSettings.key"><br/>
-	пароль<br/>
-	<br/>
-	<br/>
-	<br/>
-	<!--
-	<h3>Подключение к ClimatController.ru</h3>
-	<input type="text" name="" value=""><br/>
-	логин<br/>
-	<input type="text" name="" value=""><br/>
-	пароль
-	-->
-	<!--
-	<div id="time_setup">
-		<h3>Установка даты и времени</h3>
-		<select>
-			<option selected>1</option>
-			<option>2</option>
-			<option>3</option>
-			<option>4</option>
-			<option>5</option>
-			<option>6</option>
-			<option>7</option>
-			<option>8</option>
-			<option>9</option>
-			<option>10</option>
-			<option>11</option>
-			<option>12</option>
-			<option>13</option>
-			<option>14</option>
-			<option>15</option>
-			<option>16</option>
-			<option>17</option>
-			<option>18</option>
-			<option>19</option>
-			<option>20</option>
-			<option>21</option>
-			<option>22</option>
-			<option>23</option>
-			<option>24</option>
-			<option>25</option>
-			<option>26</option>
-			<option>27</option>
-			<option>28</option>
-			<option>29</option>
-			<option>30</option>
-			<option>31</option>
-		</select>
-		<select>
-			<option selected>январь</option>
-			<option>февраль</option>
-			<option>март</option>
-			<option>апрель</option>
-			<option>май</option>
-			<option>июнь</option>
-			<option>июль</option>
-			<option>август</option>
-			<option>сентябрь</option>
-			<option>октябрь</option>
-			<option>ноябрь</option>
-			<option>декабрь</option>
-		</select>
-		<select>
-			<option selected>2020</option>
-			<option>2021</option>
-			<option>2022</option>
-			<option>2023</option>
-			<option>2024</option>
-			<option>2025</option>
-			<option>2026</option>
-			<option>2027</option>
-			<option>2028</option>
-			<option>2029</option>
-			<option>2030</option>
+<template x-if="settings.edit">
+	<div id="setup_block" x-show="settings.edit">
+		<input type="text" name="" x-model="settings.edit.wlan.name"><br/>
+		название устройства и его WiFi-точки<br/>
+		<input type="text" name="" x-model="settings.edit.wlan.ap_key"><br/>
+		пароль доступа к устройству<br/>
+		<div class="note">Если вы измените название/пароль устройства, после сохранения настроек устройство перезагрузится, и вам нужно будет заново подключиться к WiFi-точке устройства. Уже с новым именем или паролем.</div>
+		<br/>
+		<br/>
+		<br/>
+		<h3>Подключение к WiFi сети</h3>
+		<select type="text" name="" x-model="settings.edit.wlan.ssid">
+			<template x-for="(wlan, idx) in wlanScan.data" :key="idx" x-if="wlanScan.data">
+				<option x-text="wlan" :value="wlan"></option>
+			</template>
 		</select>
 		<br/>
-		<select>
-			<option selected>0</option>
-			<option>1</option>
-			<option>2</option>
-			<option>3</option>
-		</select> :
-		<select>
-			<option selected>0</option>
-			<option>1</option>
-			<option>2</option>
-			<option>3</option>
-		</select>
+		название WiFi сети<br/>
+		<input type="text" name="" x-model="settings.edit.wlan.key"><br/>
+		пароль<br/>
+		<br/>
+		<br/>
+		<br/>
+		<!--
+		<h3>Подключение к ClimatController.ru</h3>
+		<input type="text" name="" value=""><br/>
+		логин<br/>
+		<input type="text" name="" value=""><br/>
+		пароль
+		-->
+		<div id="time_setup">
+			<h3>Установка даты и времени</h3>
+			<select x-model="settings.edit.datetime[2]">
+				<template x-for="item in time_options.days" :key="item">
+					<option x-text="item" :value="item"></option>
+				</template>
+			</select>			
+			<select x-model="settings.edit.datetime[1]">
+				<option value="1">январь</option>
+				<option value="2">февраль</option>
+				<option value="3">март</option>
+				<option value="4">апрель</option>
+				<option value="5">май</option>
+				<option value="6">июнь</option>
+				<option value="7">июль</option>
+				<option value="8">август</option>
+				<option value="9">сентябрь</option>
+				<option value="10">октябрь</option>
+				<option value="11">ноябрь</option>
+				<option value="12">декабрь</option>
+			</select>
+			<select x-model="settings.edit.datetime[0]">
+				<template x-for="item in time_options.years" :key="item">
+					<option x-text="item" :value="item"></option>
+				</template>
+			</select>			
+			<br/>
+			<select x-model="settings.edit.datetime[4]">
+				<template x-for="item in time_options.hr" :key="item">
+					<option x-text="item" :value="item"></option>
+				</template>
+			</select> :
+			<select x-model="settings.edit.datetime[5]">
+				<template x-for="item in time_options.ms" :key="item">
+					<option x-text="item" :value="item"></option>
+				</template>
+			</select>
+		</div>
+
+		<button id="ok_setup_window" @click="settings.post()">Сохранить настройки</button>
 	</div>
--->
+</template>
 
-	<button id="ok_setup_window" @click="wlanSettings.post()">Сохранить настройки</button>
-</div>
-
-
-
-
-<div id="top_info_block">
+<div id="top_info_block" x-show="!settings.edit">
 	<div id="current_time">
-		15 июля 2020 <span>12:31</span>
+		<span class="date" x-text="settings.datetime.date_text"></span>
+		<span class="time" x-text="settings.datetime.time_text"></span>
 	</div>
 </div>
 
 
-
+<!--
 
 <div id="data_block">
 
@@ -232,481 +392,473 @@
 
 <br/><br/><br/><br/><br/><br/><br/><br/>
 
+-->
 
+<div id="data_block" x-show="!settings.edit">
 
-<div id="data_block">
-
-	<div class="view_period stadart" id="pediod1">
+	<!--div class="view_period stadart" id="pediod1">
 		<span class="time_on">10:00:00</span><br/>
 		<span class="time_off">10:00:30</span>
-	</div>
-	<div class="view_period interval">
+	</div-->
+	<!--div class="view_period interval">
 		<span class="time_on">10:00:00</span><br/>
 		<span class="time_every">00:01:00</span><br/>
 		<span class="time_work">00:00:05</span><br/>
 		<span class="time_off">19:00:20</span>
-	</div>
-	<div class="view_period sunrise">
+	</div-->
+	<!--div class="view_period sunrise">
 
-	</div>
+	</div-->
+	<template x-if="timers.data" x-for="(timer, idx) in timers.data" :key="idx">
+		<div class="view_period" :class="{standart: timer.timer_type === 'standart', interval: timer.timer_type === 'interval'}" 
+			@click="timers.show_timer(idx)">
+			<template x-if="timer.timer_type == 'standart'">
+				<div>
+					<span class="time_on">
+						<span x-text="timer.conf.on.hr"></span>:
+						<span x-text="timer.conf.on.mn"></span>:
+						<span x-text="timer.conf.on.sc"></span>
+					</span><br/>
+					<span class="time_off">
+						<span x-text="timer.conf.off.hr"></span>:
+						<span x-text="timer.conf.off.mn"></span>:
+						<span x-text="timer.conf.off.sc"></span>
+					</span>
+				</div>
+			</template>
+			<template x-if="timer.timer_type == 'interval'">
+				<div>
+					<span class="time_on">
+						<span x-text="timer.conf.on.hr"></span>:
+						<span x-text="timer.conf.on.mn"></span>:
+						<span x-text="timer.conf.on.sc"></span>
+					</span><br/>
+					<span class="time_every">
+						<span x-text="timer.conf.interval_off.hr"></span>:
+						<span x-text="timer.conf.interval_off.mn"></span>:
+						<span x-text="timer.conf.interval_off.sc"></span>
+					</span><br/>
+					<span class="time_work">
+						<span x-text="timer.conf.interval_on.hr"></span>:
+						<span x-text="timer.conf.interval_on.mn"></span>:
+						<span x-text="timer.conf.interval_on.sc"></span>
+					</span><br/>
+					<span class="time_off">
+						<span x-text="timer.conf.off.hr"></span>:
+						<span x-text="timer.conf.off.mn"></span>:
+						<span x-text="timer.conf.off.sc"></span>
+					</span>
+				</div>
+			</template>
 
-	<div id="add_period_link">Добавить период</div>
+		</div>
+	</template>
+
+	<div id="add_period_link" @click="timers.show_timer(-1);">Добавить период</div>
 
 </div>
 
+<template x-if="timers.active">
+	<div class="wrapper" id="set_period">
+		<div class="set_period_form">
+			<div id="top_menu">
+				<div id="standart" :class="{'active': timers.active.timer_type == 'standart'}"
+					@click="timers.set_type('standart')">
+					<img src="/static/images/timer_icon1.png"><br/>стандарт
+				</div>
+				<div id="interval" :class="{'active': timers.active.timer_type == 'interval'}"
+					@click="timers.set_type('interval')">
+					<img src="/static/images/timer_icon2.png"><br/>интервал
+				</div>
+				<div id="sunrise" :class="{'active': timers.active.timer_type == 'sun'}"
+					@click="timers.set_type('sun')">
+					<img src="/static/images/timer_icon3.png"><br/>восход
+				</div>
+			</div>
 
-<div class="wrapper" id="set_period" style="display:none;">
-	<div class="set_period_form">
-		<div id="top_menu">
-			<div id="standart"><img src="images/timer_icon1.png"><br/>стандарт</div>
-			<div id="interval" class="active"><img src="images/timer_icon2.png"><br/>интервал</div>
-			<div id="sunrise"><img src="images/timer_icon3.png"><br/>восход</div>
+			<template x-if="timers.active.timer_type == 'standart'">
+				<div id="standart_form" class="set_time_form">
+					<table>
+						<tr>
+							<td colspan="3" class="title">ВКЛЮЧИТЬ</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.on.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.on.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.on.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ВЫКЛЮЧИТЬ</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.off.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.off.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.off.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+					</table>
+
+
+				</div>
+			</template>
+
+			<template x-if="timers.active.timer_type === 'interval'">
+
+				<div id="interval_form" class="set_time_form">
+					<table>
+						<tr>
+							<td colspan="3" class="title">НАЧАЛО РАБОТЫ</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.on.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.on.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.on.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.interval_off.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.interval_off.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.interval_off.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.interval_on.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.interval_on.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.interval_on.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ОКОНЧАНИЕ РАБОТЫ</td>
+						</tr>
+						<tr>
+							<td>
+								<select x-model="timers.active.conf.off.hr">
+									<template x-for="item in time_options.hr" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.off.mn">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select x-model="timers.active.conf.off.sc">
+									<template x-for="item in time_options.ms" :key="item">
+										<option x-text="item" :value="item"></option>
+									</template>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+					</table>
+				</div>
+			</template>
+
+
+			<template x-if="timers.active.timer_type === '_sun_'">
+				<div id="sunrise_form" class="set_time_form">
+
+					<table>
+						<tr>
+							<td class="title">ШИРОТА</td>
+							<td>&nbsp;</td>
+							<td class="title">ДОЛГОТА</td>
+						</tr>
+						<tr>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+							<td>&nbsp;</td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+						</tr>
+					</table>
+
+
+					<table>
+						<tr>
+							<td colspan="3" class="title">К ВОСХОДУ СОЛНЦА</td>
+						</tr>
+						<tr>
+							<td>
+								<select>
+									<option>+</option>
+									<option>-</option>
+								</select>
+							</td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+										<option>03</option>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text"></td>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
+						</tr>
+						<tr>
+							<td>
+								<select>
+									<option>00</option>
+									<option selected>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select><span>:</span>
+							</td>
+							<td>
+							<select>
+									<option selected>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select><span>:</span></td>
+							<td>
+								<select>
+									<option selected>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
+						</tr>
+						<tr>
+							<td>
+								<select>
+									<option selected>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select><span>:</span>
+							</td>
+							<td>
+							<select>
+									<option selected>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select><span>:</span></td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+							<td class="bottom_text">сек</td>
+						</tr>
+						<tr>
+							<td colspan="3" class="title">К ЗАХОДУ СОЛНЦА</td>
+						</tr>
+						<tr>
+							<td>
+								<select>
+									<option>+</option>
+									<option>-</option>
+								</select>
+							</td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+										<option>03</option>
+								</select><span>:</span>
+							</td>
+							<td>
+								<select>
+									<option>00</option>
+									<option>01</option>
+									<option>02</option>
+									<option>03</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td class="bottom_text"></td>
+							<td class="bottom_text">час</td>
+							<td class="bottom_text">мин</td>
+						</tr>
+					</table>
+
+				</div>
+			</template>
+
+			<template x-if="timers.active.idx != -1">
+				<div>
+					<button class="delete" id="delete_period" @click="timers.delete()">Удалить этот период</button><br/>
+				</div>
+			</template>
+			<button class="cancel" id="close_period" @click="timers.cancel()">Отмена</button>
+			<button class="confirm" id="ok_period" @click="timers.save()">OK</button>
 		</div>
-
-		<div id="standart_form" class="set_time_form">
-			<table>
-				<tr>
-					<td colspan="3" class="title">ВКЛЮЧИТЬ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ВЫКЛЮЧИТЬ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option selected>10</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-			</table>
-
-
-		</div>
-
-<Br/><Br/><Br/><Br/>
-
-
-		<div id="interval_form" class="set_time_form">
-			<table>
-				<tr>
-					<td colspan="3" class="title">НАЧАЛО РАБОТЫ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option selected>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ОКОНЧАНИЕ РАБОТЫ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-			</table>
-		</div>
-
-
-<Br/><Br/><Br/><Br/>
-
-		<div id="sunrise_form" class="set_time_form">
-
-			<table>
-				<tr>
-					<td class="title">ШИРОТА</td>
-					<td>&nbsp;</td>
-					<td class="title">ДОЛГОТА</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-					<td>&nbsp;</td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-			</table>
-
-
-			<table>
-				<tr>
-					<td colspan="3" class="title">К ВОСХОДУ СОЛНЦА</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>+</option>
-							<option>-</option>
-						</select>
-					</td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-								<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text"></td>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>00</option>
-							<option selected>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-					<select>
-							<option selected>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select><span>:</span></td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-					<td class="bottom_text">сек</td>
-				</tr>
-				<tr>
-					<td colspan="3" class="title">К ЗАХОДУ СОЛНЦА</td>
-				</tr>
-				<tr>
-					<td>
-						<select>
-							<option>+</option>
-							<option>-</option>
-						</select>
-					</td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-								<option>03</option>
-						</select><span>:</span>
-					</td>
-					<td>
-						<select>
-							<option>00</option>
-							<option>01</option>
-							<option>02</option>
-							<option>03</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td class="bottom_text"></td>
-					<td class="bottom_text">час</td>
-					<td class="bottom_text">мин</td>
-				</tr>
-			</table>
-
-		</div>
-
-		<button class="delete" id="delete_period">Удалить этот период</button><br/>
-		<button class="cancel" id="close_period">Отмена</button><button class="confirm" id="ok_period">OK</button>
 	</div>
-</div>
+</template>
 
 
-<script>
-
-  pediod1.onclick = function(event) {
-    document.getElementById('set_period').style.display="block";
-  }
-  delete_period.onclick = function(event) {
-    document.getElementById('set_period').style.display="none";
-  }
-  close_period.onclick = function(event) {
-    document.getElementById('set_period').style.display="none";
-  }
-  ok_period.onclick = function(event) {
-    document.getElementById('set_period').style.display="none";
-  }
-
-
-
-</script>
-
-
-
-
-
-<script>
-  setup_link.onclick = function(event) {
-    document.getElementById('setup_block').style.display = (document.getElementById('setup_block').style.display == 'none') ? 'block' : 'none'
-    document.getElementById('data_block').style.display = (document.getElementById('data_block').style.display == 'none') ? 'block' : 'none'
-  }
-  ok_setup_window.onclick = function(event) {
-    document.getElementById('setup_block').style.display="none";
-    document.getElementById('data_block').style.display = "block";
-  }
-
-
-  change_temp.onclick = function(event) {
-    document.getElementById('set_temp_window').style.display="block";
-  }
-  close_temp_window.onclick = function(event) {
-    document.getElementById('set_temp_window').style.display="none";
-  }
-  ok_temp_window.onclick = function(event) {
-    document.getElementById('set_temp_window').style.display="none";
-  }
-
-  change_humidity.onclick = function(event) {
-    document.getElementById('set_humidity_window').style.display="block";
-  }
-  close_humidity_window.onclick = function(event) {
-    document.getElementById('set_humidity_window').style.display="none";
-  }
-  ok_humidity_window.onclick = function(event) {
-    document.getElementById('set_humidity_window').style.display="none";
-  }
-
-
-</script>
-
-
+</body>
 
 </html>

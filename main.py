@@ -1,130 +1,152 @@
-from time import sleep_ms
+import gc
+import uasyncio
+from time import sleep
 
 import network
 import machine
-from machine import WDT
+from machine import WDT, Pin
 import ujson
+import utime
 
-from microWebSrv import MicroWebSrv
+import picoweb
 
 from climate import ClimateController
+from timers import RtcController
+
+APP = picoweb.WebApp(__name__)
 
 CONF = {}
 with open('conf.json', 'r') as conf_file:
     CONF = ujson.load(conf_file)
     print('config loaded')
 
-nic = network.WLAN(mode=network.STA_IF)
-WLANS_AVAILABLE = [wlan.ssid for wlan in nic.scan()]
+nic = network.WLAN(network.STA_IF)
+nic.active(True)
+WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
+print(WLANS_AVAILABLE)
+HOST = '0.0.0.0'
 if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] in WLANS_AVAILABLE:
     nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
+    sleep(5)
+    HOST = nic.ifconfig()[0]
 if not nic.isconnected():
     AP = network.WLAN(network.AP_IF)
+    AP.active(True)
     AP.config(essid=CONF['wlan']['name'], password=CONF['wlan']['ap_key'],\
         authmode=CONF['wlan']['authmode'])
     AP.ifconfig((CONF['wlan']['address'], CONF['wlan']['mask'],\
         CONF['wlan']['address'], CONF['wlan']['address']))
-    AP.active(True)
+    HOST = CONF['wlan']['address']
 
-HTML_INDEX = ''
-with open('html/index.html', 'r') as _file:
-    HTML_INDEX = _file.read()
-    modules = {'climate': ''}
-    if CONF['climate']['enabled']:
-        with open('html/climate.html', 'r') as _file:
-            modules['climate'] = _file.read()
-    HTML_INDEX = HTML_INDEX % modules
+RTC_CONTROLLER = RtcController(scl_pin_no=CONF["i2c"]["scl"], sda_pin_no=CONF["i2c"]["sda"])
+RTC_CONTROLLER.get_time(set_rtc=True)
 
 CLIMATE_CONTROLLER = None
-if CONF['climate']['enabled']:
+if CONF['modules']['climate']['enabled']:
     try:
-        CLIMATE_CONTROLLER = ClimateController(CONF['climate'])
+        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'])
     except Exception as exc:
         print('Climate controller initialization error')
         print(exc)
+
+LED = Pin(2, Pin.OUT)
 
 def save_conf():
     with open('conf.json', 'w') as _conf_file:
         _conf_file.write(ujson.dumps(CONF))
 
-@MicroWebSrv.route('/api/climate/limits', 'GET')
-def limits(http_client, http_response):
-    if CLIMATE_CONTROLLER:
-        http_response.WriteResponseJSONOk(obj=CLIMATE_CONTROLLER.limits,\
-            headers={'cache-control': 'no-store'})
+async def send_json(rsp, data):
+    await picoweb.start_response(rsp, 'application/json', {'cache-control': 'no-store'})
+    await rsp.awrite(ujson.dumps(data))
+    gc.collect()
 
-@MicroWebSrv.route('/api/climate/limits', 'POST')
-def edit_limits(http_client, http_response):
+@APP.route('/api/climate/limits')
+def limits(req, rsp):
     if CLIMATE_CONTROLLER:
-        req_json = http_client.ReadRequestContentAsJSON()
-        CLIMATE_CONTROLLER.limits.update(req_json)
+        if req.method == "POST":
+            await req.read_json()
+            CLIMATE_CONTROLLER.limits.update(req.json)
+            save_conf()
+        await send_json(rsp, CLIMATE_CONTROLLER.limits)        
+
+@APP.route('/api/timers')
+def timers(req, rsp):
+    if req.method == 'POST':
+        await req.read_json()
+        for key in req.json.keys():
+            if key == 'new':
+                CONF['timers'].append(req.json[key])
+            else:
+                CONF['timers'][int(key)] = req.json[key]
         save_conf()
-        limits(http_client, http_response)
+    elif req.method == 'DELETE':
+        await req.read_json()
+        del CONF['timers'][req.json]
+        save_conf()
+    await send_json(rsp, CONF['timers'])
 
-@MicroWebSrv.route('/api/timers', 'GET')
-def timers(http_client, http_response):
-    http_response.WriteResponseJSONOk(obj=CONF['timers'],\
-        headers={'cache-control': 'no-store'})
+@APP.route('/api/settings/wlan')
+def get_wlan_settings(req, rsp):
+    if req.method == 'POST':
+        await req.read_json()
+        CONF['wlan'].update(req.json)
+        save_conf()
+        await picoweb.start_response(rsp, "text/plain")
+        await rsp.awrite("Ok")
+        await asyncio.sleep(5)
+        machine.reset()
+    else:
+        await send_json(rsp, CONF['wlan'])        
 
-@MicroWebSrv.route('/api/timers', 'POST')
-def edit_timers(http_client, http_response):
-    req_json = http_client.ReadRequestContentAsJSON()
-    for key in req_json.keys():
-        if key == 'new':
-            CONF['timers'].append(req_json[key])
-        else:
-            CONF['timers'][int(key)] = req_json[key]
-    save_conf()
-    timers(http_client, http_response)
+@APP.route('/api/settings/wlan/scan')
+def get_wlan_scan(req, rsp):
+    await send_json(rsp, WLANS_AVAILABLE)
 
-@MicroWebSrv.route('/api/timers', 'DELETE')
-def delete_timer(http_client, http_response):
-    req_json = http_client.ReadRequestContentAsJSON()
-    del CONF['tmers'][req_json]
-    save_conf()
-    timers(http_client, http_response)
-
-@MicroWebSrv.route('/api/settings/wlan', 'GET')
-def get_wlan_settings(http_client, http_response):
-    http_response.WriteResponseJSONOk(obj=CONF['network'],\
-        headers={'cache-control': 'no-store'})
-
-@MicroWebSrv.route('/api/settings/wlan/scan', 'GET')
-def get_wlan_scan(http_client, http_response):
-    http_response.WriteResponseJSONOk(obj=WLANS_AVAILABLE,\
-        headers={'cache-control': 'no-store'})
-
-@MicroWebSrv.route('/api/settings/wlan', 'POST')
-def set_wlan_settings(http_client, http_response):
-    req_json = http_client.ReadRequestContentAsJSON()
-    CONF['network'].update(req_json)
-    save_conf()
-    http_response.WriteResponseOk(headers=None, contentType="text/html",\
-        contentCharset="UTF-8", content='OK')
-    machine.reset()
-
-@MicroWebSrv.route('/api/climate/data', 'GET')
-def get_data(http_client, http_response):
+@APP.route('/api/climate/data')
+def get_data(req, rsp):
     if CLIMATE_CONTROLLER:
-        http_response.WriteResponseJSONOk(obj=CLIMATE_CONTROLLER.data,\
-            headers={'cache-control': 'no-store'})
+        await send_json(rsp, CLIMATE_CONTROLLER.data)
 
+@APP.route('/api/time')
+def get_time(req, rsp):
+    if req.method == 'POST':
+        await req.read_json()
+        try:
+            utime.mktime(req.json)
+        except:
+            await picoweb.start_response(resp, status="400")
+            await resp.awrite("Некорректная дата/время!")
+            return
+        RTC_CONTROLLER.set_time(req.json)
+    await send_json(rsp, machine.RTC().datetime())
 
-@MicroWebSrv.route('/', 'GET')
-def get_index(http_client, http_response):
-    http_response.WriteResponseOk(headers=None, contentType="text/html",\
-        contentCharset="UTF-8", content=HTML_INDEX)
+@APP.route('/')
+def get_index(req, rsp):
+    await APP.sendfile(rsp, 'html/index.html', content_type="text/html; charset=utf-8")
+    gc.collect()
 
-srv = MicroWebSrv(webPath="www/")
-srv.Start(threaded=True)
+#DEV_WDT = WDT(timeout=5000)
 
-DEV_WDT = WDT(timeout=5000)
+async def adjust_rtc():
+    RTC_CONTROLLER.get_time(set_rtc=True)
+    await uasyncio.sleep(600)
+    gc.collect()
 
-while True:
-    try:
-        if CLIMATE_CONTROLLER:
-            CLIMATE_CONTROLLER.read()
-        else:
-            sleep_ms(CONF['sleep'])
-    finally:
-        DEV_WDT.feed()
+async def bg_work():
+    led_state = False
+    while True:
+        led_state = not led_state
+        LED.value(1 if led_state else 0)
+        try:
+            if CLIMATE_CONTROLLER:
+                CLIMATE_CONTROLLER.read()
+            else:
+                await uasyncio.sleep_ms(CONF['sleep'])
+        finally:
+            #DEV_WDT.feed()
+            gc.collect()
+
+LOOP = uasyncio.get_event_loop()
+LOOP.create_task(bg_work())
+LOOP.create_task(adjust_rtc())
+APP.run(debug=True, host=HOST, port=80)

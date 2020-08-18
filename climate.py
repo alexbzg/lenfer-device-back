@@ -1,4 +1,5 @@
-from time import sleep_ms
+import gc
+import uasyncio
 
 from machine import Pin, I2C
 import onewire
@@ -26,7 +27,7 @@ class ClimateController:
                 'bme': {'pressure': None, 'temperature': None, 'humidity': None}}
         self.sleep = config['sleep']
 
-    def read(self):
+    async def read(self):
 
         ow_flag = False
         if self.dev_ow:
@@ -36,7 +37,7 @@ class ClimateController:
             except Exception as exc:
                 print('Onewire error')
                 print(exc)
-        sleep_ms(self.sleep)
+        await uasyncio.sleep_ms(self.sleep)
         if ow_flag:
             for cnt, rom in enumerate(self.ow_roms):
                 self.data['ow'][cnt] = round(self.dev_ds.read_temp(rom), 1)
@@ -66,3 +67,4 @@ class ClimateController:
                 self.vent_out.value(0)
         except Exception as exc:
             print(exc)
+            gc.collect()
