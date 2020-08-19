@@ -11,7 +11,7 @@ import utime
 import picoweb
 
 from climate import ClimateController
-from timers import RtcController
+from timers import RtcController, Timer
 
 APP = picoweb.WebApp(__name__)
 
@@ -51,6 +51,12 @@ if CONF['modules']['climate']['enabled']:
 
 LED = Pin(2, Pin.OUT)
 
+TIMERS = []
+def update_timers():
+    global TIMERS
+    TIMERS = [Timer(timer_conf) for timer_conf in CONF['timers']]
+update_timers()
+
 def save_conf():
     with open('conf.json', 'w') as _conf_file:
         _conf_file.write(ujson.dumps(CONF))
@@ -79,10 +85,12 @@ def timers(req, rsp):
             else:
                 CONF['timers'][int(key)] = req.json[key]
         save_conf()
+        update_timers()
     elif req.method == 'DELETE':
         await req.read_json()
         del CONF['timers'][req.json]
         save_conf()
+        update_timers()
     await send_json(rsp, CONF['timers'])
 
 @APP.route('/api/settings/wlan')
@@ -116,6 +124,7 @@ def get_time(req, rsp):
         except:
             await picoweb.start_response(resp, status="400")
             await resp.awrite("Некорректная дата/время!")
+            gc.collect()
             return
         RTC_CONTROLLER.set_time(req.json)
     await send_json(rsp, machine.RTC().datetime())
@@ -146,7 +155,16 @@ async def bg_work():
             #DEV_WDT.feed()
             gc.collect()
 
+async def check_timers():
+    while True:
+        time_tuple = machine.RTC().datetime()
+        time = time_tuple[4]*60 + time_tuple[5]
+        for timer in TIMERS:
+            timer.check(time)
+        await uasyncio.sleep(60)
+
 LOOP = uasyncio.get_event_loop()
 LOOP.create_task(bg_work())
 LOOP.create_task(adjust_rtc())
+LOOP.create_task(check_timers())
 APP.run(debug=True, host=HOST, port=80)
