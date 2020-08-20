@@ -49,7 +49,8 @@ if CONF['modules']['climate']['enabled']:
         print('Climate controller initialization error')
         print(exc)
 
-LED = Pin(2, Pin.OUT)
+LED = Pin(33, Pin.OUT)
+Pin(2, Pin.OUT).value(False)
 
 TIMERS = []
 def update_timers():
@@ -137,9 +138,10 @@ def get_index(req, rsp):
 #DEV_WDT = WDT(timeout=5000)
 
 async def adjust_rtc():
-    RTC_CONTROLLER.get_time(set_rtc=True)
-    await uasyncio.sleep(600)
-    gc.collect()
+    while True:
+        RTC_CONTROLLER.get_time(set_rtc=True)
+        await uasyncio.sleep(600)
+        gc.collect()
 
 async def bg_work():
     led_state = False
@@ -161,7 +163,9 @@ async def check_timers():
         time = time_tuple[4]*60 + time_tuple[5]
         for timer in TIMERS:
             timer.check(time)
+        gc.collect()
         await uasyncio.sleep(60)
+
 
 LOOP = uasyncio.get_event_loop()
 LOOP.create_task(bg_work())

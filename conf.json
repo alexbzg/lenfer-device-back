@@ -35,5 +35,6 @@
         "scl": 26,
         "sda": 25
     },
-    "timers": []
+    "timers": [],
+    "relays": [2, 33]
 }
