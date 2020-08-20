@@ -49,13 +49,15 @@ if CONF['modules']['climate']['enabled']:
         print('Climate controller initialization error')
         print(exc)
 
-LED = Pin(33, Pin.OUT)
-Pin(2, Pin.OUT).value(False)
+LED = None
+if ("led" in CONF and CONF["led"]):
+    LED = Pin(CONF["led"], Pin.OUT)
 
 TIMERS = []
 def update_timers():
     global TIMERS
-    TIMERS = [Timer(timer_conf) for timer_conf in CONF['timers']]
+    TIMERS = [Timer(timer_conf, CONF["relays"][0]) for timer_conf in CONF['timers']]
+    gc.collect()
 update_timers()
 
 def save_conf():
@@ -146,8 +148,9 @@ async def adjust_rtc():
 async def bg_work():
     led_state = False
     while True:
-        led_state = not led_state
-        LED.value(1 if led_state else 0)
+        if LED:
+            led_state = not led_state
+            LED.value(1 if led_state else 0)
         try:
             if CLIMATE_CONTROLLER:
                 CLIMATE_CONTROLLER.read()

@@ -31,11 +31,11 @@ def timer_seconds(entry):
 
 class Timer:
 
-    def __init__(self, conf):
+    def __init__(self, conf, relay_pin_no):
         self.timer_type = conf['timer_type']
         self.time_on = timer_minutes(conf['conf']['on'])
         self.time_off = timer_minutes(conf['conf']['off'])
-        self.relay = Pin(2, Pin.OUT)
+        self.relay = Pin(relay_pin_no, Pin.OUT)
         self.active = False
         if (self.timer_type == 'interval'):
             self.period = timer_minutes(conf['conf']['period'])
@@ -63,6 +63,8 @@ class Timer:
                 self.off()
         elif self.timer_type == 'interval':
             if self.time_on <= time and self.time_off > time and not self.active:
-                if ((time - self.time_on) % self.period) * 60 < self.period_off:
+                if self.period == 0 and self.time_on == time:
+                    self.on()
+                elif ((time - self.time_on) % self.period) * 60 < self.period_off:
                     uasyncio.get_event_loop().create_task(self.delayed_off())
                     self.on()
