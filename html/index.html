@@ -24,16 +24,34 @@
 	}
 	const months_genitive = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", 
 		"сентября", "октября", "ноября", "декабря"];
-	function cmp_time(a, b) {
-		if (Number(a.hr) < Number(b.hr) || (Number(a.hr) == Number(b.hr) && Number(a.mn) < Number(b.mn)))
-			return 1;
-		else if (Number(a.hr) == Number(b.hr) && Number(a.mn) == Number(b.mn))
-			return 0;
-		else
-			return -1;
-	}
 	function format_time(time) {
-		return `${time.hr}:${time.mn}:${time.sc}`;
+		let r = `${time.hr}:${time.mn}`;
+		if (time.sc)
+			r += `:${time.sc}`;
+		return r;
+	}
+	function time_number(time) {
+		let t = Number(time.hr) * 3600 + Number(time.mn) * 60;
+		if (time.sc)
+			t += Number(time.sc);
+		return t;
+	}
+	function timer_interval(conf) {
+		const ti = [time_number(conf.on), time_number(conf.off)];
+		if (!ti[1] && conf.period_off && !time_number(conf.period))
+			ti[1] = ti[0] + time_number(conf.period_off);
+		return ti;
+	}
+	function format_timer(timer) {
+		const conf = timer.conf;
+		if (timer.timer_type == 'standart')
+			return `${format_time(conf.on)}-${format_time(conf.off)}`;
+		else {
+			if (time_number(conf.period))
+				return `${format_time(conf.on)}-${format_time(conf.off)} ВКЛ на ${format_time(conf.period_off)} КАЖДЫЕ ${format_time(conf.period)}`;
+			else
+				return `${format_time(conf.on)} ВКЛ на ${format_time(conf.period_off)}`;			
+		} 
 	}
 	function wlan_settings() {
 		return {
@@ -178,6 +196,8 @@
 						timer_type: timer.timer_type, 
 						conf: JSON.parse(JSON.stringify(timer.conf))
 					};
+					if (timer.timer_type == 'interval')
+						this.active.period = timer.conf.period.hr != '00' || timer.conf.period.mn != '00';
 				}
 				else
 					this.active = {timer_type: null, idx: -1, conf: null};
@@ -199,26 +219,30 @@
 					this.active = null;		
 			},
 			save() {
-				const timers_length = this.data.length;
 				const conf = this.active.conf;
+				const limits = timer_interval(conf);
 				let error = null;
-				if (cmp_time(conf.on, conf.off) != 1) 
+				if (limits[0] >= limits[1])
 					error = "Период не может заканчиваться раньше своего начала.";
-				else if (this.active.timer_type == 'interval' && cmp_time(conf.period_off, conf.period) != 1)
-					error = "Значение \"ВКЛЮЧАТЬ КАЖДЫЕ\" должно быть больше значения \"ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА\".";
-				else 
+				else if (this.active.timer_type == 'interval' && time_number(conf.period) && 
+					time_number(conf.period_off) >= time_number(conf.period))
+					error = "Значение \"ВКЛЮЧАТЬ КАЖДЫЕ\" должно быть больше значения \"ВКЛЮЧИТЬ НА\".";
+				if (!error) {
+					const timers_length = this.data.length;
 					for (let co=0; co < timers_length; co++) {
 						if (co != this.active.idx) {
 							const tconf = this.data[co].conf;
-							if ((cmp_time(conf.on, tconf.on) >= 0 && cmp_time(tconf.on, conf.off) > 0) ||
-								(cmp_time(conf.on, tconf.off) >= 0 && cmp_time(tconf.off, conf.off) > 0) ||
-								(cmp_time(tconf.on, conf.on) >= 0 && cmp_time(conf.on, tconf.off) > 0) ||
-								(cmp_time(tconf.on, conf.off) >= 0 && cmp_time(conf.off, tconf.off) > 0)) {
-								error = `Период конфликтует с периодом ${format_time(tconf.on)}-${format_time(tconf.off)}`;
+							const tlimits = timer_interval(tconf);
+							if ((limits[0] >= tlimits[0] && limits[0] <= tlimits[1]) ||
+								(limits[1] >= tlimits[0] && limits[1] <= tlimits[1]) ||
+								(tlimits[0] >= limits[0] && tlimits[0] <= limits[1]) ||
+								(tlimits[1] >= limits[0] && tlimits[1] <= limits[1])) {
+								error = `Период конфликтует с периодом ${format_timer(this.data[co])}`;
 								break;
 							}						
 						}
 					}
+				}
 				if (error) {
 					alert(error);
 					return;
@@ -253,7 +277,7 @@
 							sc: '00'
 						}
 					}
-				else if (timer_type === 'interval')
+				else if (timer_type === 'interval') {
 					this.active.conf = {
 						on: {
 							hr: '00',
@@ -276,13 +300,51 @@
 							sc: '00'
 						}
 					}
+					this.active.period = false;
+				}
 			}
 		};
+	}
+	function relay() {
+		return {
+			elapsed: null,
+			elapsed_text: null,
+			elapsed_tick_handle: null,
+			set_elapsed (value) {
+				console.log(`relay elapsed: ${value}` )
+				this.elapsed = value;
+				this.elapsed_text = value == null ? null : zeropad(value);
+			},
+			switch (val) {
+				if (this.elapsed_tick_handle) {
+					clearInterval(this.elapsed_tick_handle);
+					this.elapsed_tick_handle = null;
+				}
+				fetch('/api/relay', {
+					method: 'POST',
+					cache: "no-cache",
+					headers: {
+						'Content-Type': 'application/json',
+					},					
+					body: JSON.stringify({relay: 0, value: val})
+				})
+					.then(() => {
+						if (val) {
+							this.set_elapsed(0);
+							this.elapsed_tick_handle = setInterval(() => {
+								this.set_elapsed(this.elapsed + 1);
+							}, 1000)
+						} else 
+							this.set_elapsed(null);
+					});
+			}
+
+		}
 	}
 	
 </script>
 </head>
-<body x-data="{settings: settings(), wlanScan: wlanScan(), timers: timers(), time_options: time_options()}" 
+<body x-data="{settings: settings(), wlanScan: wlanScan(), timers: timers(), time_options: time_options(), relay: relay()}" 
 	x-init="settings.load(); wlanScan.load(); timers.load(); setInterval(() => { settings.datetime.load(); }, 30000);"
 	x-cloak>
 
@@ -448,48 +510,73 @@
 		<div class="view_period" :class="{standart: timer.timer_type === 'standart', interval: timer.timer_type === 'interval'}" 
 			@click="timers.show_timer(idx)">
 			<template x-if="timer.timer_type == 'standart'">
-				<div>
-					<span class="time_on">
-						<span x-text="timer.conf.on.hr"></span>:
-						<span x-text="timer.conf.on.mn"></span>:
-						<span x-text="timer.conf.on.sc"></span>
-					</span><br/>
-					<span class="time_off">
-						<span x-text="timer.conf.off.hr"></span>:
-						<span x-text="timer.conf.off.mn"></span>:
-						<span x-text="timer.conf.off.sc"></span>
-					</span>
-				</div>
+				<table>
+					<tr>
+						<td class="time_note">СТАРТ</td>
+						<td class="time_on">
+							<span x-text="timer.conf.on.hr"></span>:
+							<span x-text="timer.conf.on.mn"></span>
+						</td>
+					</tr>
+					<tr>
+						<td class="time_note">СТОП</td>
+						<td class="time_off">								
+							<span x-text="timer.conf.off.hr"></span>:
+							<span x-text="timer.conf.off.mn"></span>
+						</td>
+					</tr>
+				</table>			
 			</template>
 			<template x-if="timer.timer_type == 'interval'">
-				<div>
-					<span class="time_on">
-						<span x-text="timer.conf.on.hr"></span>:
-						<span x-text="timer.conf.on.mn"></span>:
-						<span x-text="timer.conf.on.sc"></span>
-					</span><br/>
-					<span class="time_every">
-						<span x-text="timer.conf.period.hr"></span>:
-						<span x-text="timer.conf.period.mn"></span>:
-						<span x-text="timer.conf.period.sc"></span>
-					</span><br/>
-					<span class="time_work">
-						<span x-text="timer.conf.period_off.hr"></span>:
-						<span x-text="timer.conf.period_off.mn"></span>:
-						<span x-text="timer.conf.period_off.sc"></span>
-					</span><br/>
-					<span class="time_off">
-						<span x-text="timer.conf.off.hr"></span>:
-						<span x-text="timer.conf.off.mn"></span>:
-						<span x-text="timer.conf.off.sc"></span>
-					</span>
-				</div>
+				<table>
+					<tr>
+						<td class="time_note">СТАРТ</td>
+						<td class="time_on">
+							<span x-text="timer.conf.on.hr"></span>:
+							<span x-text="timer.conf.on.mn"></span>
+						</td>
+					</tr>
+					<tr>
+						<td class="time_note">ВКЛ на</td>
+						<td class="time_off">								
+							<span x-text="timer.conf.period_off.hr"></span>:
+							<span x-text="timer.conf.period_off.mn"></span>:
+							<span x-text="timer.conf.period_off.sc"></span>
+						</td>
+					</tr>
+					<template x-if="timer.conf.period.hr != '00' || timer.conf.period.mn != '00'">
+						<tbody>
+							<tr>
+								<td class="time_note">ВКЛ каждые</td>
+								<td class="time_on">
+									<span x-text="timer.conf.period.hr"></span>:
+									<span x-text="timer.conf.period.mn"></span>
+								</td>
+							</tr>
+							<tr>
+								<td class="time_note">СТОП</td>
+								<td class="time_off">								
+									<span x-text="timer.conf.off.hr"></span>:
+									<span x-text="timer.conf.off.mn"></span>
+								</td>
+							</tr>		
+						</tbody>
+					</template>
+				</table>			
 			</template>
 
 		</div>
 	</template>
 
 	<div id="add_period_link" @click="timers.show_timer(-1);">Добавить период</div>
+
+	<div id="manual_start">
+		<div id="manual_counter" x-text="relay.elapsed_text">
+		</div>
+		<button id="manual_button" @mousedown="relay.switch(true)" @mouseup="relay.switch(false)">РУЧНОЙ ПУСК</button>
+	</div>
+</div>
+
 
 </div>
 
@@ -505,17 +592,17 @@
 					@click="timers.set_type('interval')">
 					<img src="/static/images/timer_icon2.png"><br/>интервал
 				</div>
-				<div id="sunrise" :class="{'active': timers.active.timer_type == 'sun'}"
+				<!--div id="sunrise" :class="{'active': timers.active.timer_type == 'sun'}"
 					@click="timers.set_type('sun')">
 					<img src="/static/images/timer_icon3.png"><br/>восход
-				</div>
+				</div-->
 			</div>
 
 			<template x-if="timers.active.timer_type == 'standart'">
 				<div id="standart_form" class="set_time_form">
 					<table>
 						<tr>
-							<td colspan="3" class="title">ВКЛЮЧИТЬ</td>
+							<td colspan="2" class="title">ВКЛЮЧИТЬ</td>
 						</tr>
 						<tr>
 							<td>
@@ -530,23 +617,15 @@
 									<template x-for="item in time_options.ms" :key="item">
 										<option x-text="item" :value="item"></option>
 									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.on.sc">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
 								</select>
 							</td>
 						</tr>
 						<tr>
 							<td class="bottom_text">час</td>
 							<td class="bottom_text">мин</td>
-							<td class="bottom_text">сек</td>
 						</tr>
 						<tr>
-							<td colspan="3" class="title">ВЫКЛЮЧИТЬ</td>
+							<td colspan="2" class="title">ВЫКЛЮЧИТЬ</td>
 						</tr>
 						<tr>
 							<td>
@@ -561,20 +640,12 @@
 									<template x-for="item in time_options.ms" :key="item">
 										<option x-text="item" :value="item"></option>
 									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.off.sc">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
 								</select>
 							</td>
 						</tr>
 						<tr>
 							<td class="bottom_text">час</td>
 							<td class="bottom_text">мин</td>
-							<td class="bottom_text">сек</td>
 						</tr>
 					</table>
 
@@ -587,7 +658,7 @@
 				<div id="interval_form" class="set_time_form">
 					<table>
 						<tr>
-							<td colspan="3" class="title">НАЧАЛО РАБОТЫ</td>
+							<td colspan="2" class="title">НАЧАЛО РАБОТЫ</td>
 						</tr>
 						<tr>
 							<td>
@@ -602,54 +673,17 @@
 									<template x-for="item in time_options.ms" :key="item">
 										<option x-text="item" :value="item"></option>
 									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.on.sc">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
 								</select>
 							</td>
 						</tr>
 						<tr>
 							<td class="bottom_text">час</td>
 							<td class="bottom_text">мин</td>
-							<td class="bottom_text">сек</td>
 						</tr>
+					</table>
+					<table>
 						<tr>
-							<td colspan="3" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
-						</tr>
-						<tr>
-							<td>
-								<select x-model="timers.active.conf.period.hr">
-									<template x-for="item in time_options.hr" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.period.mn">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.period.sc">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select>
-							</td>
-						</tr>
-						<tr>
-							<td class="bottom_text">час</td>
-							<td class="bottom_text">мин</td>
-							<td class="bottom_text">сек</td>
-						</tr>
-						<tr>
-							<td colspan="3" class="title">ОСТАВЛЯТЬ ВКЛЮЧЕННЫМ НА</td>
+							<td colspan="3" class="title">ВКЛЮЧИТЬ на</td>
 						</tr>
 						<tr>
 							<td>
@@ -679,43 +713,68 @@
 							<td class="bottom_text">мин</td>
 							<td class="bottom_text">сек</td>
 						</tr>
-						<tr>
-							<td colspan="3" class="title">ОКОНЧАНИЕ РАБОТЫ</td>
-						</tr>
-						<tr>
-							<td>
-								<select x-model="timers.active.conf.off.hr">
-									<template x-for="item in time_options.hr" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.off.mn">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select><span>:</span>
-							</td>
-							<td>
-								<select x-model="timers.active.conf.off.sc">
-									<template x-for="item in time_options.ms" :key="item">
-										<option x-text="item" :value="item"></option>
-									</template>
-								</select>
-							</td>
-						</tr>
-						<tr>
-							<td class="bottom_text">час</td>
-							<td class="bottom_text">мин</td>
-							<td class="bottom_text">сек</td>
-						</tr>
+
 					</table>
+
+					<div class="multiperiod">
+						<input type="checkbox" name="" x-model="timers.active.period"> ПОВТОР ВКЛЮЧЕНИЯ
+					</div>					
+
+					<template x-if="timers.active.period">
+						<table>
+							<tr>
+								<td colspan="2" class="title">ВКЛЮЧАТЬ КАЖДЫЕ</td>
+							</tr>
+							<tr>
+								<td>
+									<select x-model="timers.active.conf.period.hr">
+										<template x-for="item in time_options.hr" :key="item">
+											<option x-text="item" :value="item"></option>
+										</template>
+									</select><span>:</span>
+								</td>
+								<td>
+									<select x-model="timers.active.conf.period.mn">
+										<template x-for="item in time_options.ms" :key="item">
+											<option x-text="item" :value="item"></option>
+										</template>
+									</select>
+								</td>
+							</tr>
+							<tr>
+								<td class="bottom_text">час</td>
+								<td class="bottom_text">мин</td>
+							</tr>
+							<tr>
+								<td colspan="2" class="title">ОКОНЧАНИЕ РАБОТЫ</td>
+							</tr>
+							<tr>
+								<td>
+									<select x-model="timers.active.conf.off.hr">
+										<template x-for="item in time_options.hr" :key="item">
+											<option x-text="item" :value="item"></option>
+										</template>
+									</select><span>:</span>
+								</td>
+								<td>
+									<select x-model="timers.active.conf.off.mn">
+										<template x-for="item in time_options.ms" :key="item">
+											<option x-text="item" :value="item"></option>
+										</template>
+									</select>
+								</td>
+							</tr>
+							<tr>
+								<td class="bottom_text">час</td>
+								<td class="bottom_text">мин</td>
+							</tr>
+						</table>
+					</template>
 				</div>
 			</template>
 
 
-			<template x-if="timers.active.timer_type === '_sun_'">
+			<!--template x-if="timers.active.timer_type === '_sun_'">
 				<div id="sunrise_form" class="set_time_form">
 
 					<table>
@@ -880,7 +939,7 @@
 					</table>
 
 				</div>
-			</template>
+			</template-->
 
 			<template x-if="timers.active.idx != -1">
 				<div>

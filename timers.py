@@ -55,16 +55,19 @@ class Timer:
         await uasyncio.sleep(self.period_off)
         self.off()
 
+    def on_off(self):
+        uasyncio.get_event_loop().create_task(self.delayed_off())
+        self.on()
+
     def check(self, time):
         if self.timer_type == 'standart':
-            if self.time_on <= time and self.time_off > time:
+            if self.time_on <= time < self.time_off:
                 self.on()
             elif self.time_off == time and self.active:
                 self.off()
         elif self.timer_type == 'interval':
-            if self.time_on <= time and self.time_off > time and not self.active:
-                if self.period == 0 and self.time_on == time:
-                    self.on()
-                elif ((time - self.time_on) % self.period) * 60 < self.period_off:
-                    uasyncio.get_event_loop().create_task(self.delayed_off())
-                    self.on()
+            if self.time_on == time and self.period == 0:
+                self.on_off()
+            elif self.time_on <= time < self.time_off and not self.active and\
+                ((time - self.time_on) % self.period) * 60 < self.period_off:
+                self.on_off()
