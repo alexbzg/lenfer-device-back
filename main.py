@@ -13,6 +13,7 @@ import picoweb
 
 from climate import ClimateController
 from timers import RtcController, Timer
+from relay import Relay
 
 APP = picoweb.WebApp(__name__)
 
@@ -40,6 +41,20 @@ except Exception as exc:
 if not CONF:
     load_def_conf()
 
+RTC_CONTROLLER = RtcController(scl_pin_no=CONF["i2c"]["scl"], sda_pin_no=CONF["i2c"]["sda"])
+RTC_CONTROLLER.get_time(set_rtc=True)
+
+CLIMATE_CONTROLLER = None
+if CONF['modules']['climate']['enabled']:
+    try:
+        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'])
+    except Exception as exc:
+        LOG.exc(exc, 'Climate controller initialization error')
+
+LEDS = {led: Pin(pin_no, Pin.OUT) for led, pin_no in CONF['leds'].items()}
+for led in LEDS.values():
+    led.off()
+
 STATUS = {"wlan": None, "factory_reset": False}
 
 nic = network.WLAN(network.STA_IF)
@@ -63,17 +78,7 @@ else:
     HOST = CONF['wlan']['address']
     STATUS["wlan"] = network.AP_IF
 
-RTC_CONTROLLER = RtcController(scl_pin_no=CONF["i2c"]["scl"], sda_pin_no=CONF["i2c"]["sda"])
-RTC_CONTROLLER.get_time(set_rtc=True)
-
-CLIMATE_CONTROLLER = None
-if CONF['modules']['climate']['enabled']:
-    try:
-        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'])
-    except Exception as exc:
-        LOG.exc(exc, 'Climate controller initialization error')
-
-LEDS = {led: Pin(pin_no, Pin.OUT) for led, pin_no in CONF['leds'].items()}
+    
 async def blink(leds, count, time_ms):
     for co in range(count):
         for led in leds:
@@ -84,20 +89,21 @@ async def blink(leds, count, time_ms):
         if co < count - 1:
             await uasyncio.sleep_ms(time_ms)
 
+RELAYS = [Relay(pin_no) for pin_no in CONF["relays"]]
+
 TIMERS = []
 def update_timers():
     global TIMERS
-    TIMERS = [Timer(timer_conf, CONF["relays"][0]) for timer_conf in CONF['timers']]
+    TIMERS = [Timer(timer_conf, RELAYS[0]) for timer_conf in CONF['timers']]
     gc.collect()
 update_timers()
 
-RELAYS = [Pin(pin_no, Pin.OUT) for pin_no in CONF["relays"]]
 RELAY_BUTTONS = [Pin(pin_no, Pin.IN) for pin_no in CONF["relay_buttons"]]
 
 def set_relay_button_irq(idx):
 
     def handler(pin):
-        RELAYS[idx].value(not RELAY_BUTTONS[idx].value())
+        RELAYS[idx].on(value=not RELAY_BUTTONS[idx].value(), source='manual')
 
     RELAY_BUTTONS[idx].irq(handler)
 
@@ -112,16 +118,17 @@ def factory_reset_irq(pin):
         if not STATUS['factory_reset']:
             STATUS['factory_reset'] = 'pending'
             uasyncio.get_event_loop().create_task(factory_reset())
-         
+    
 async def factory_reset():
     LOG.info('factory reset is pending')
-    for co in range(100):
+    for co in range(50):
         await uasyncio.sleep_ms(100)
         if STATUS['factory_reset'] != 'pending':
             LOG.info('factory reset is cancelled')            
             STATUS['factory_reset'] = None
             return
-    await blink(("status", "battery"), 3, 300)
+    for led in LEDS.values():
+        led.on()
     load_def_conf()
     save_conf()
     machine.reset()
@@ -170,7 +177,7 @@ def get_wlan_settings(req, rsp):
         save_conf()
         await picoweb.start_response(rsp, "text/plain")
         await rsp.awrite("Ok")
-        await asyncio.sleep(5)
+        await uasyncio.sleep(5)
         machine.reset()
     else:
         await send_json(rsp, CONF['wlan'])        
@@ -207,7 +214,7 @@ def get_index(req, rsp):
 def relay_api(req, rsp):
     if req.method == 'POST':
         await req.read_json()
-        RELAYS[req.json['relay']].value(req.json['value'])
+        RELAYS[req.json['relay']].on(value=req.json['value'], source='manual')
         await picoweb.start_response(rsp, 'text/plain', {'cache-control': 'no-store'})
         await rsp.awrite('Ok')
     else:
@@ -233,7 +240,7 @@ async def check_timers():
 
 async def bg_leds():
     while True:
-        await blink(("status",), 1 if STATUS["wlan"] == network.AP_IF else 2, 500)
+        await blink(("status",), 1 if STATUS["wlan"] == network.AP_IF else 2, 100)
         await uasyncio.sleep(5)
         gc.collect()
 

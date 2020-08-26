@@ -310,16 +310,20 @@
 			elapsed: null,
 			elapsed_text: null,
 			elapsed_tick_handle: null,
+			cancel: false,
 			set_elapsed (value) {
 				console.log(`relay elapsed: ${value}` )
 				this.elapsed = value;
 				this.elapsed_text = value == null ? null : zeropad(value);
 			},
 			switch (val) {
+				if (this.cancel)
+					return;
 				if (this.elapsed_tick_handle) {
 					clearInterval(this.elapsed_tick_handle);
 					this.elapsed_tick_handle = null;
 				}
+				this.cancel = !val;
 				fetch('/api/relay', {
 					method: 'POST',
 					cache: "no-cache",
@@ -330,12 +334,15 @@
 				})
 					.then(() => {
 						if (val) {
-							this.set_elapsed(0);
-							this.elapsed_tick_handle = setInterval(() => {
-								this.set_elapsed(this.elapsed + 1);
-							}, 1000)
+							if (!this.cancel) {
+								this.set_elapsed(0);
+								this.elapsed_tick_handle = setInterval(() => {
+									this.set_elapsed(this.elapsed + 1);
+								}, 1000)
+							}
 						} else 
 							this.set_elapsed(null);
+						this.cancel = false;
 					});
 			}
 

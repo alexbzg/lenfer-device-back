@@ -31,13 +31,13 @@ def timer_seconds(entry):
 
 class Timer:
 
-    def __init__(self, conf, relay_pin_no):
+    def __init__(self, conf, relay):
         self.timer_type = conf['timer_type']
         self.time_on = timer_minutes(conf['conf']['on'])
         self.time_off = timer_minutes(conf['conf']['off'])
-        self.relay = Pin(relay_pin_no, Pin.OUT)
+        self.relay = relay
         self.active = False
-        if (self.timer_type == 'interval'):
+        if self.timer_type == 'interval':
             self.period = timer_minutes(conf['conf']['period'])
             self.period_off = timer_seconds(conf['conf']['period_off'])
 
@@ -68,6 +68,6 @@ class Timer:
         elif self.timer_type == 'interval':
             if self.time_on == time and self.period == 0:
                 self.on_off()
-            elif self.time_on <= time < self.time_off and not self.active and\
+            elif self.period and self.time_on <= time < self.time_off and not self.active and\
                 ((time - self.time_on) % self.period) * 60 < self.period_off:
                 self.on_off()
