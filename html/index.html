@@ -48,10 +48,20 @@
 			return `${format_time(conf.on)}-${format_time(conf.off)}`;
 		else {
 			if (time_number(conf.period))
-				return `${format_time(conf.on)}-${format_time(conf.off)} ВКЛ на ${format_time(conf.period_off)} КАЖДЫЕ ${format_time(conf.period)}`;
+				return `${format_time(conf.on)}-${format_time(conf.off)} ВКЛ на ${format_duration(conf.period_off)} КАЖДЫЕ ${format_duration(conf.period)}`;
 			else
-				return `${format_time(conf.on)} ВКЛ на ${format_time(conf.period_off)}`;			
+				return `${format_time(conf.on)} ВКЛ на ${format_duration(conf.period_off)}`;			
 		} 
+	}
+	function format_duration(time) {
+		let r = '';
+		if (Number(time.hr))
+			r += `${Number(time.hr)} час`;
+		if (Number(time.mn))
+			r += (r === '' ? '' : ' ') + `${Number(time.mn)} мин`;
+		if (Number(time.sc))
+			r += (r === '' ? '' : ' ') + `${Number(time.sc)} сек`;
+		return r;
 	}
 	function wlan_settings() {
 		return {
@@ -355,10 +365,12 @@
 	x-init="settings.load(); wlanScan.load(); timers.load(); setInterval(() => { settings.datetime.load(); }, 30000);"
 	x-cloak>
 
-<div id="title">
-	<img id="setup_link" src="/static/images/icon_setup.png" @click="settings.toggle_edit()">
-	TimerController<br/><span>v.1.0</span>
-</div>
+<template x-if="settings.wlan.data">
+	<div id="title">
+		<img id="setup_link" src="/static/images/icon_setup.png" @click="settings.toggle_edit()">
+		<span x-text="settings.wlan.data.name"></span><br/><span id="version">v.1.0</span>
+	</div>
+</template>
 
 <template x-if="settings.edit">
 	<div id="setup_block" x-show="settings.edit">
@@ -521,15 +533,15 @@
 					<tr>
 						<td class="time_note">СТАРТ</td>
 						<td class="time_on">
-							<span x-text="timer.conf.on.hr"></span>:
-							<span x-text="timer.conf.on.mn"></span>
+							<span x-text="timer.conf.on.hr" class="digits"></span>:
+							<span x-text="timer.conf.on.mn" class="digits"></span>
 						</td>
 					</tr>
 					<tr>
 						<td class="time_note">СТОП</td>
 						<td class="time_off">								
-							<span x-text="timer.conf.off.hr"></span>:
-							<span x-text="timer.conf.off.mn"></span>
+							<span x-text="timer.conf.off.hr" class="digits"></span>:
+							<span x-text="timer.conf.off.mn" class="digits"></span>
 						</td>
 					</tr>
 				</table>			
@@ -539,35 +551,40 @@
 					<tr>
 						<td class="time_note">СТАРТ</td>
 						<td class="time_on">
-							<span x-text="timer.conf.on.hr"></span>:
-							<span x-text="timer.conf.on.mn"></span>
+							<span x-text="timer.conf.on.hr" class="digits"></span>:
+							<span x-text="timer.conf.on.mn" class="digits"></span>
 						</td>
 					</tr>
 					<tr>
 						<td class="time_note">ВКЛ на</td>
-						<td class="time_off">								
-							<span x-text="timer.conf.period_off.hr"></span>:
-							<span x-text="timer.conf.period_off.mn"></span>:
-							<span x-text="timer.conf.period_off.sc"></span>
+						<td class="time_off">
+							<span x-text="Number(timer.conf.period_off.hr)" class="digits" x-show="Number(timer.conf.period_off.hr)"></span>
+							<span class="unit" x-show="Number(timer.conf.period_off.hr)">час</span> 
+							<span x-text="Number(timer.conf.period_off.mn)" class="digits" x-show="Number(timer.conf.period_off.mn)"></span>
+							<span class="unit" x-show="Number(timer.conf.period_off.mn)">мин</span> 
+							<span x-text="Number(timer.conf.period_off.sc)" class="digits" x-show="Number(timer.conf.period_off.sc)"></span>
+							<span class="unit" x-show="Number(timer.conf.period_off.sc)">сек</span> 
 						</td>
 					</tr>
 					<template x-if="timer.conf.period.hr != '00' || timer.conf.period.mn != '00'">
-						<tbody>
-							<tr>
-								<td class="time_note">ВКЛ каждые</td>
-								<td class="time_on">
-									<span x-text="timer.conf.period.hr"></span>:
-									<span x-text="timer.conf.period.mn"></span>
+						<tr>
+							<td class="time_note">ВКЛ каждые</td>
+							<td class="time_on">
+								<span x-text="Number(timer.conf.period.hr)" class="digits" x-show="Number(timer.conf.period.hr)"></span>
+								<span class="unit" x-show="Number(timer.conf.period.hr)">час</span> 
+								<span x-text="Number(timer.conf.period.mn)" class="digits" x-show="Number(timer.conf.period.mn)"></span>
+								<span class="unit" x-show="Number(timer.conf.period.mn)">мин</span> 
 								</td>
-							</tr>
-							<tr>
-								<td class="time_note">СТОП</td>
-								<td class="time_off">								
-									<span x-text="timer.conf.off.hr"></span>:
-									<span x-text="timer.conf.off.mn"></span>
-								</td>
-							</tr>		
-						</tbody>
+						</tr>
+					</template>
+					<template x-if="timer.conf.period.hr != '00' || timer.conf.period.mn != '00'">
+						<tr>
+							<td class="time_note">СТОП</td>
+							<td class="time_off">								
+								<span x-text="timer.conf.off.hr" class="digits"></span>:
+								<span x-text="timer.conf.off.mn" class="digits"></span>
+							</td>
+						</tr>		
 					</template>
 				</table>			
 			</template>

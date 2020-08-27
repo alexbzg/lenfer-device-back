@@ -77,7 +77,6 @@ else:
         CONF['wlan']['address'], CONF['wlan']['address']))
     HOST = CONF['wlan']['address']
     STATUS["wlan"] = network.AP_IF
-
     
 async def blink(leds, count, time_ms):
     for co in range(count):
@@ -92,11 +91,11 @@ async def blink(leds, count, time_ms):
 RELAYS = [Relay(pin_no) for pin_no in CONF["relays"]]
 
 TIMERS = []
-def update_timers():
-    global TIMERS
-    TIMERS = [Timer(timer_conf, RELAYS[0]) for timer_conf in CONF['timers']]
-    gc.collect()
-update_timers()
+def create_timer(conf):
+    return Timer(conf, RELAYS[0])
+    
+for timer_conf in CONF['timers']:
+    TIMERS.append(create_timer(timer_conf))
 
 RELAY_BUTTONS = [Pin(pin_no, Pin.IN) for pin_no in CONF["relay_buttons"]]
 
@@ -133,7 +132,6 @@ async def factory_reset():
     save_conf()
     machine.reset()
 
-
 FACTORY_RESET_BUTTON = Pin(CONF['factory_reset'], Pin.IN)
 FACTORY_RESET_BUTTON.irq(factory_reset_irq)
 
@@ -156,17 +154,21 @@ def timers(req, rsp):
     if req.method == 'POST':
         await req.read_json()
         for key in req.json.keys():
+            timer_conf = req.json[key]
             if key == 'new':
-                CONF['timers'].append(req.json[key])
+                CONF['timers'].append(timer_conf)
+                TIMERS.append(create_timer(timer_conf))
             else:
-                CONF['timers'][int(key)] = req.json[key]
+                TIMERS[int(key)].off()
+                CONF['timers'][int(key)] = timer_conf
+                TIMERS[int(key)] = create_timer(timer_conf)
         save_conf()
-        update_timers()
     elif req.method == 'DELETE':
         await req.read_json()
+        TIMERS[req.json].off()
+        del TIMERS[req.json]
         del CONF['timers'][req.json]
         save_conf()
-        update_timers()
     await send_json(rsp, CONF['timers'])
 
 @APP.route('/api/settings/wlan')
@@ -248,4 +250,5 @@ LOOP = uasyncio.get_event_loop()
 LOOP.create_task(bg_leds())
 LOOP.create_task(adjust_rtc())
 LOOP.create_task(check_timers())
+gc.collect()
 APP.run(debug=True, host=HOST, port=80)
