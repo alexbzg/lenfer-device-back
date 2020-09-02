@@ -1,13 +1,15 @@
 import gc
-import uasyncio
 from time import sleep
 
+import uasyncio
 import network
 import machine
-from machine import WDT, Pin
+from machine import WDT, Pin, I2C
 import ujson
 import utime
 import ulogging
+import onewire
+import urequests
 
 import picoweb
 
@@ -17,7 +19,7 @@ from relay import Relay
 
 APP = picoweb.WebApp(__name__)
 
-LOG = ulogging.getLogger("main")
+LOG = ulogging.getLogger("Main")
 
 CONF = {}
 def save_conf():
@@ -34,20 +36,25 @@ try:
     with open('conf.json', 'r') as conf_file:
         CONF = ujson.load(conf_file)
         if CONF:
-            print('config loaded')               
+            print('config loaded')
 except Exception as exc:
     LOG.exc(exc, 'Config load error')
 
 if not CONF:
     load_def_conf()
 
-RTC_CONTROLLER = RtcController(scl_pin_no=CONF["i2c"]["scl"], sda_pin_no=CONF["i2c"]["sda"])
+i2c_rtc = CONF["i2c"][CONF["rtc"]["i2c"]]
+RTC_CONTROLLER = RtcController(scl_pin_no=i2c_rtc["scl"], sda_pin_no=i2c_rtc["sda"])
 RTC_CONTROLLER.get_time(set_rtc=True)
+
+I2C_LIST = [I2C(scl=i2c_conf['scl'], sda=i2c_conf['sda']) for i2c_conf in CONF['i2c']]
+
+OW_LIST = [onewire.OneWire(Pin(ow_pin)) for ow_pin in CONF['ow']]
 
 CLIMATE_CONTROLLER = None
 if CONF['modules']['climate']['enabled']:
     try:
-        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'])
+        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'], I2C_LIST, OW_LIST)
     except Exception as exc:
         LOG.exc(exc, 'Climate controller initialization error')
 
@@ -63,21 +70,25 @@ WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
 print(WLANS_AVAILABLE)
 HOST = '0.0.0.0'
 if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] in WLANS_AVAILABLE:
-    nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
-    sleep(5)
-    HOST = nic.ifconfig()[0]
+    try:
+        nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
+        sleep(5)
+        HOST = nic.ifconfig()[0]
+    except Exception as exc:
+        LOG.exc(exc, 'WLAN connect error')
 if nic.isconnected():
     STATUS["wlan"] = network.STA_IF
 else:
     AP = network.WLAN(network.AP_IF)
     AP.active(True)
+    authmode = 4 if CONF['wlan']['ap_key'] else 0
     AP.config(essid=CONF['wlan']['name'], password=CONF['wlan']['ap_key'],\
-        authmode=CONF['wlan']['authmode'])
+        authmode=authmode)
     AP.ifconfig((CONF['wlan']['address'], CONF['wlan']['mask'],\
         CONF['wlan']['address'], CONF['wlan']['address']))
     HOST = CONF['wlan']['address']
     STATUS["wlan"] = network.AP_IF
-    
+
 async def blink(leds, count, time_ms):
     for co in range(count):
         for led in leds:
@@ -93,7 +104,7 @@ RELAYS = [Relay(pin_no) for pin_no in CONF["relays"]]
 TIMERS = []
 def create_timer(conf):
     return Timer(conf, RELAYS[0])
-    
+
 for timer_conf in CONF['timers']:
     TIMERS.append(create_timer(timer_conf))
 
@@ -123,7 +134,7 @@ async def factory_reset():
     for co in range(50):
         await uasyncio.sleep_ms(100)
         if STATUS['factory_reset'] != 'pending':
-            LOG.info('factory reset is cancelled')            
+            LOG.info('factory reset is cancelled')
             STATUS['factory_reset'] = None
             return
     for led in LEDS.values():
@@ -147,7 +158,7 @@ def limits(req, rsp):
             await req.read_json()
             CLIMATE_CONTROLLER.limits.update(req.json)
             save_conf()
-        await send_json(rsp, CLIMATE_CONTROLLER.limits)        
+        await send_json(rsp, CLIMATE_CONTROLLER.limits)
 
 @APP.route('/api/timers')
 def timers(req, rsp):
@@ -182,7 +193,7 @@ def get_wlan_settings(req, rsp):
         await uasyncio.sleep(5)
         machine.reset()
     else:
-        await send_json(rsp, CONF['wlan'])        
+        await send_json(rsp, CONF['wlan'])
 
 @APP.route('/api/settings/wlan/scan')
 def get_wlan_scan(req, rsp):
@@ -200,8 +211,8 @@ def get_time(req, rsp):
         try:
             utime.mktime(req.json)
         except:
-            await picoweb.start_response(resp, status="400")
-            await resp.awrite("Некорректная дата/время!")
+            await picoweb.start_response(rsp, status="400")
+            await rsp.awrite("Некорректная дата/время!")
             gc.collect()
             return
         RTC_CONTROLLER.set_time(req.json)
@@ -220,7 +231,7 @@ def relay_api(req, rsp):
         await picoweb.start_response(rsp, 'text/plain', {'cache-control': 'no-store'})
         await rsp.awrite('Ok')
     else:
-        await picoweb.start_response(resp, status="405")
+        await picoweb.start_response(rsp, status="405")
     gc.collect()
 
 #DEV_WDT = WDT(timeout=5000)
@@ -246,9 +257,26 @@ async def bg_leds():
         await uasyncio.sleep(5)
         gc.collect()
 
+async def post_sensor_data():
+    while True:
+        await uasyncio.sleep(60)
+        time_tuple = machine.RTC().datetime()
+        tstamp = "%s/%s/%s %s:%s" % time_tuple[:5]
+        data = {
+            'device_id': CONF['integration']['device_id'],
+            'token': CONF['integration']['device_token'],
+            'data': [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
+                for _id, value in CLIMATE_CONTROLLER.data]
+        }
+        rsp = urequests.post(CONF['integration']['server_url'] + '/api/sensors_data', data=data)
+        LOG.debug(rsp.text)
+        gc.collect()
+
 LOOP = uasyncio.get_event_loop()
 LOOP.create_task(bg_leds())
 LOOP.create_task(adjust_rtc())
 LOOP.create_task(check_timers())
+if CONF['integration']['device_token'] and CLIMATE_CONTROLLER and STATUS['wlan'] == network.STA_IF:
+    LOOP.create_task(post_sensor_data())
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)

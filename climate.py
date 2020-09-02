@@ -1,70 +1,122 @@
 import gc
 import uasyncio
+import ulogging
 
-from machine import Pin, I2C
-import onewire
+from machine import Pin
 import ds18x20
 
 import BME280
 
+LOG = ulogging.getLogger("Climate")
+
+class SensorDevice:
+    "generic sensor handler"
+
+    def __init__(self, conf, controller):
+        self.sensor_type = conf['type']
+        self._controller = controller
+        self._sensors_ids = conf['sensors_ids']
+        for sensor_id in self._sensors_ids:
+            if not sensor_id in controller.data:
+                controller.data[sensor_id] = None
+
+class SensorDeviceBME280(SensorDevice):
+    "BME280 sensor handler"
+
+    def __init__(self, conf, controller, i2c_list):
+        SensorDevice.__init__(self, conf, controller)
+        self._i2c = i2c_list[conf['i2c']]
+
+    def read(self):
+        "reads sensors data and stores in into controller data field"
+        bme = BME280.BME280(i2c=self._i2c)
+        self._controller.data[self._sensors_ids[0]] = round((bme.read_temperature() / 100), 1)
+        self._controller.data[self._sensors_ids[1]] = int(bme.read_humidity() // 1024)
+
+class SensorDeviceDS18x20(SensorDevice):
+    "ds18x20 sensor handler"
+
+    def __init__(self, conf, controller, ow_list):
+        SensorDevice.__init__(self, conf, controller)
+        self._rom = None
+        self._ds = None
+        _ow = ow_list[conf['ow']]
+        if _ow:
+            self._ds = ds18x20.DS18X20(_ow)
+            ow_roms = self._ds.scan()
+            if ow_roms:
+                self.rom = ow_roms[0]
+        self._convert = False
+
+    def convert(self):
+        "requests sensor readings"
+        if self._rom:
+            try:
+                self._ds.convert_temp()
+                self._convert = True
+            except Exception as exc:
+                LOG.exc(exc, 'onewire error')
+
+    def read(self):
+        "reads sensors data and stores in into controller data field"
+        if self._convert:
+            try:
+                self._controller.data[self._sensors_ids[0]] =\
+                    round(self._ds.read_temp(self._rom), 1)
+            except Exception as exc:
+                LOG.exc(exc, 'onewire error')
+                self._controller.data[self._sensors_ids[0]] = None
+            finally:
+                self._convert = False
+
 class ClimateController:
 
-    def __init__(self, config):
+    def __init__(self, conf, i2c_list, ow_list):
 
-        self.dev_ow = onewire.OneWire(Pin(config['pins']['ow']))
-        self.dev_ds = ds18x20.DS18X20(self.dev_ow)
-        self.ow_roms = self.dev_ds.scan()
-
-        self.dev_i2c = I2C(scl=Pin(config['pins']['ics']['scl']),\
-            sda=Pin(config['pins']['ics']['sda']), freq=10000)
-
-        self.heat = Pin(config['pins']['heat'], Pin.OUT)
-        self.vent_out = Pin(config['pins']['vents']['out'], Pin.OUT)
-        self.vent_mix = Pin(config['pins']['vents']['mix'], Pin.OUT)
-
-        self.limits = config['limits']
-        self.data = {'ow': [None for rom in self.ow_roms],\
-                'bme': {'pressure': None, 'temperature': None, 'humidity': None}}
-        self.sleep = config['sleep']
+        self.limits = conf['limits']
+        self.sensors_roles = conf['sensors_roles']
+        self._switches = conf['switches']
+        self._sleep = conf['sleep']
+        self.data = {}
+        self.sensor_devices = []
+        self.heat = Pin(conf["switches"]['heat'], Pin.OUT)
+        self.vent_out = Pin(conf["switches"]['vent_out'], Pin.OUT)
+        self.vent_mix = Pin(conf["switches"]['vent_mix'], Pin.OUT)
+        for sensor_device_conf in conf['sensor_devices']:
+            if sensor_device_conf['type'] == 'bme280':
+                self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, i2c_list))
+            elif sensor_device_conf['type'] == 'ds18x20':
+                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, ow_list))
 
     async def read(self):
 
-        ow_flag = False
-        if self.dev_ow:
-            try:
-                self.dev_ds.convert_temp()
-                ow_flag = True
-            except Exception as exc:
-                print('Onewire error')
-                print(exc)
-        await uasyncio.sleep_ms(self.sleep)
-        if ow_flag:
-            for cnt, rom in enumerate(self.ow_roms):
-                self.data['ow'][cnt] = round(self.dev_ds.read_temp(rom), 1)
-        try:
-            bme = BME280.BME280(i2c=self.dev_i2c)
-            self.data['bme']['pressure'] = int((bme.read_pressure() // 256) * 0.0075)
-            self.data['bme']['temperature'] = round((bme.read_temperature() / 100), 1)
-            self.data['bme']['humidity'] = int(bme.read_humidity() // 1024)
-            if self.data['bme']['temperature'] < self.limits['temperature'][0]:
-                self.heat.value(1)
-            elif self.data['bme']['temperature'] > self.limits['temperature'][0] + 2:
-                self.heat.value(0)
-            if ow_flag:
-                if self.data['bme']['temperature'] > self.data['ow'][0] + 3\
-                    or self.data['bme']['temperature'] < self.data['ow'][0] - 3:
-                    self.vent_mix.value(1)
-                elif self.data['bme']['temperature'] < self.data['ow'][0] + 1\
-                    and self.data['bme']['temperature'] > self.data['ow'][0] - 1:
-                    self.vent_mix.value(0)
-            else:
+        for sensor_device in self.sensor_devices:
+            if sensor_device.sensor_type == 'ds18x20':
+                sensor_device.convert()
+        await uasyncio.sleep_ms(self._sleep)
+        for sensor_device in self.sensor_devices:
+            sensor_device.read()
+            temp = [
+                self.data[self.sensors_roles['temperature'][0]],
+                self.data[self.sensors_roles['temperature'][1]]
+                ]
+            humid = self.data[self.sensors_roles['humidity']]
+            if temp[0]:
+                if temp[0] < self.limits['temperature'][0]:
+                    self.heat.value(1)
+                elif temp[0] > self.limits['temperature'][0] + 2:
+                    self.heat.value(0)
+                if temp[1]:
+                    if temp[0] > temp[1] + 3 or temp[0] < temp[1] - 3:
+                        self.vent_mix.value(1)
+                    elif temp[0] < temp[1] + 1 and temp[0] > temp[1] - 1:
+                        self.vent_mix.value(0)
+            if not temp[0] or not temp[1]:
                 self.vent_mix.value(0)
-            if self.data['bme']['humidity'] > self.limits['humidity'][1]\
-                or self.data['bme']['temperature'] > self.limits['temperature'][1]:
+            if (humid and humid > self.limits['humidity'][1]) or\
+                (temp[0] and temp[0] > self.limits['temperature'][1]):
                 self.vent_out.value(1)
-            elif self.data['bme']['humidity'] < self.limits['humidity'][1] - 5 and\
-                self.data['bme']['temperature'] < self.limits['temperature'][1] - 2:
+            elif (not humid or humid < self.limits['humidity'][1] - 5) and\
+                (not temp[0] or temp[0] < self.limits['temperature'][1] - 2):
                 self.vent_out.value(0)
-        except Exception as exc:
-            print(exc)
-            gc.collect()
+        gc.collect()
