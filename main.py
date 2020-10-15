@@ -9,13 +9,14 @@ import ujson
 import utime
 import ulogging
 import onewire
+
 import urequests
+
+import ds18x20
 
 import picoweb
 
-from climate import ClimateController
-from timers import RtcController, Timer
-from relay import Relay
+from lenfer_device import LenferDevice
 
 APP = picoweb.WebApp(__name__)
 
@@ -43,26 +44,7 @@ except Exception as exc:
 if not CONF:
     load_def_conf()
 
-i2c_rtc = CONF["i2c"][CONF["rtc"]["i2c"]]
-RTC_CONTROLLER = RtcController(scl_pin_no=i2c_rtc["scl"], sda_pin_no=i2c_rtc["sda"])
-RTC_CONTROLLER.get_time(set_rtc=True)
-
-I2C_LIST = [I2C(scl=i2c_conf['scl'], sda=i2c_conf['sda']) for i2c_conf in CONF['i2c']]
-
-OW_LIST = [onewire.OneWire(Pin(ow_pin)) for ow_pin in CONF['ow']]
-
-CLIMATE_CONTROLLER = None
-if CONF['modules']['climate']['enabled']:
-    try:
-        CLIMATE_CONTROLLER = ClimateController(CONF['modules']['climate'], I2C_LIST, OW_LIST)
-    except Exception as exc:
-        LOG.exc(exc, 'Climate controller initialization error')
-
-LEDS = {led: Pin(pin_no, Pin.OUT) for led, pin_no in CONF['leds'].items()}
-for led in LEDS.values():
-    led.off()
-
-STATUS = {"wlan": None, "factory_reset": False}
+DEVICE = LenferDevice(CONF)
 
 nic = network.WLAN(network.STA_IF)
 nic.active(True)
@@ -77,7 +59,7 @@ if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] in WLANS_AVAILABLE:
     except Exception as exc:
         LOG.exc(exc, 'WLAN connect error')
 if nic.isconnected():
-    STATUS["wlan"] = network.STA_IF
+    DEVICE.status["wlan"] = network.STA_IF
 else:
     AP = network.WLAN(network.AP_IF)
     AP.active(True)
@@ -87,57 +69,26 @@ else:
     AP.ifconfig((CONF['wlan']['address'], CONF['wlan']['mask'],\
         CONF['wlan']['address'], CONF['wlan']['address']))
     HOST = CONF['wlan']['address']
-    STATUS["wlan"] = network.AP_IF
-
-async def blink(leds, count, time_ms):
-    for co in range(count):
-        for led in leds:
-            LEDS[led].on()
-        await uasyncio.sleep_ms(time_ms)
-        for led in leds:
-            LEDS[led].off()
-        if co < count - 1:
-            await uasyncio.sleep_ms(time_ms)
-
-RELAYS = [Relay(pin_no) for pin_no in CONF["relays"]]
-
-TIMERS = []
-def create_timer(conf):
-    return Timer(conf, RELAYS[0])
-
-for timer_conf in CONF['timers']:
-    TIMERS.append(create_timer(timer_conf))
-
-RELAY_BUTTONS = [Pin(pin_no, Pin.IN) for pin_no in CONF["relay_buttons"]]
-
-def set_relay_button_irq(idx):
-
-    def handler(pin):
-        RELAYS[idx].on(value=not RELAY_BUTTONS[idx].value(), source='manual')
-
-    RELAY_BUTTONS[idx].irq(handler)
-
-for idx in range(len(RELAY_BUTTONS)):
-    set_relay_button_irq(idx)
+    DEVICE.status["wlan"] = network.AP_IF
 
 def factory_reset_irq(pin):
     if pin.value():
-        if STATUS['factory_reset'] == 'pending':
-            STATUS['factory_reset'] == 'cancel'
+        if DEVICE.status['factory_reset'] == 'pending':
+            DEVICE.status['factory_reset'] = 'cancel'
     else:
-        if not STATUS['factory_reset']:
-            STATUS['factory_reset'] = 'pending'
+        if not DEVICE.status['factory_reset']:
+            DEVICE.status['factory_reset'] = 'pending'
             uasyncio.get_event_loop().create_task(factory_reset())
     
 async def factory_reset():
     LOG.info('factory reset is pending')
     for co in range(50):
         await uasyncio.sleep_ms(100)
-        if STATUS['factory_reset'] != 'pending':
+        if DEVICE.status['factory_reset'] != 'pending':
             LOG.info('factory reset is cancelled')
-            STATUS['factory_reset'] = None
+            DEVICE.status['factory_reset'] = None
             return
-    for led in LEDS.values():
+    for led in DEVICE.leds.values():
         led.on()
     load_def_conf()
     save_conf()
@@ -147,40 +98,38 @@ FACTORY_RESET_BUTTON = Pin(CONF['factory_reset'], Pin.IN)
 FACTORY_RESET_BUTTON.irq(factory_reset_irq)
 
 async def send_json(rsp, data):
-    await picoweb.start_response(rsp, 'application/json', {'cache-control': 'no-store'})
+    await picoweb.start_response(rsp, 'application/json', "200", {'cache-control': 'no-store'})
     await rsp.awrite(ujson.dumps(data))
     gc.collect()
 
 @APP.route('/api/climate/limits')
 def limits(req, rsp):
-    if CLIMATE_CONTROLLER:
+    ctrl = DEVICE.modules['climate']
+    if ctrl:
         if req.method == "POST":
             await req.read_json()
-            CLIMATE_CONTROLLER.limits.update(req.json)
+            ctrl.limits.update(req.json)
             save_conf()
-        await send_json(rsp, CLIMATE_CONTROLLER.limits)
+        await send_json(rsp, ctrl.limits)
 
 @APP.route('/api/timers')
 def timers(req, rsp):
-    if req.method == 'POST':
-        await req.read_json()
-        for key in req.json.keys():
-            timer_conf = req.json[key]
-            if key == 'new':
-                CONF['timers'].append(timer_conf)
-                TIMERS.append(create_timer(timer_conf))
-            else:
-                TIMERS[int(key)].off()
-                CONF['timers'][int(key)] = timer_conf
-                TIMERS[int(key)] = create_timer(timer_conf)
-        save_conf()
-    elif req.method == 'DELETE':
-        await req.read_json()
-        TIMERS[req.json].off()
-        del TIMERS[req.json]
-        del CONF['timers'][req.json]
-        save_conf()
-    await send_json(rsp, CONF['timers'])
+    ctrl = DEVICE.modules['relays']
+    if ctrl:
+        if req.method == 'POST':
+            await req.read_json()
+            for key in req.json.keys():
+                timer_conf = req.json[key]
+                if key == 'new':
+                    ctrl.add_timer(timer_conf)
+                else:
+                    ctrl.update_timer(int(key), timer_conf)
+            save_conf()
+        elif req.method == 'DELETE':
+            await req.read_json()
+            ctrl.delete_timer(req.json)
+            save_conf()
+        await send_json(rsp, CONF['timers'])
 
 @APP.route('/api/settings/wlan')
 def get_wlan_settings(req, rsp):
@@ -201,21 +150,19 @@ def get_wlan_scan(req, rsp):
 
 @APP.route('/api/climate/data')
 def get_data(req, rsp):
-    if CLIMATE_CONTROLLER:
-        await send_json(rsp, CLIMATE_CONTROLLER.data)
+    ctrl = DEVICE.modules['climate']
+    if ctrl:
+        await send_json(rsp, ctrl.data)
 
 @APP.route('/api/time')
 def get_time(req, rsp):
     if req.method == 'POST':
-        await req.read_json()
-        try:
-            utime.mktime(req.json)
-        except:
-            await picoweb.start_response(rsp, status="400")
-            await rsp.awrite("Некорректная дата/время!")
-            gc.collect()
-            return
-        RTC_CONTROLLER.set_time(req.json)
+        ctrl = DEVICE.modules['rtc']
+        if ctrl:
+            await req.read_json()
+            ctrl.set_time(req.json)
+        else:
+            machine.RTC().datetime(req.json)    
     await send_json(rsp, machine.RTC().datetime())
 
 @APP.route('/')
@@ -225,58 +172,23 @@ def get_index(req, rsp):
 
 @APP.route('/api/relay')
 def relay_api(req, rsp):
-    if req.method == 'POST':
-        await req.read_json()
-        RELAYS[req.json['relay']].on(value=req.json['value'], source='manual')
-        await picoweb.start_response(rsp, 'text/plain', {'cache-control': 'no-store'})
-        await rsp.awrite('Ok')
-    else:
-        await picoweb.start_response(rsp, status="405")
-    gc.collect()
+    ctrl = DEVICE.modules['relays']
+    if ctrl:
+        if req.method == 'POST':
+            await req.read_json()
+            ctrl.relays[req.json['relay']].on(value=req.json['value'], source='manual')
+            await picoweb.start_response(rsp, 'text/plain', {'cache-control': 'no-store'})
+            await rsp.awrite('Ok')
+        else:
+            await picoweb.start_response(rsp, status="405")
+        gc.collect()
+
+@APP.route('/api/modules')
+def get_modules(req, rsp):
+    await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
 
 #DEV_WDT = WDT(timeout=5000)
 
-async def adjust_rtc():
-    while True:
-        RTC_CONTROLLER.get_time(set_rtc=True)
-        await uasyncio.sleep(600)
-        gc.collect()
-
-async def check_timers():
-    while True:
-        time_tuple = machine.RTC().datetime()
-        time = time_tuple[4]*60 + time_tuple[5]
-        for timer in TIMERS:
-            timer.check(time)
-        gc.collect()
-        await uasyncio.sleep(60)
-
-async def bg_leds():
-    while True:
-        await blink(("status",), 1 if STATUS["wlan"] == network.AP_IF else 2, 100)
-        await uasyncio.sleep(5)
-        gc.collect()
-
-async def post_sensor_data():
-    while True:
-        await uasyncio.sleep(60)
-        time_tuple = machine.RTC().datetime()
-        tstamp = "%s/%s/%s %s:%s" % time_tuple[:5]
-        data = {
-            'device_id': CONF['integration']['device_id'],
-            'token': CONF['integration']['device_token'],
-            'data': [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
-                for _id, value in CLIMATE_CONTROLLER.data]
-        }
-        rsp = urequests.post(CONF['integration']['server_url'] + '/api/sensors_data', data=data)
-        LOG.debug(rsp.text)
-        gc.collect()
-
-LOOP = uasyncio.get_event_loop()
-LOOP.create_task(bg_leds())
-LOOP.create_task(adjust_rtc())
-LOOP.create_task(check_timers())
-if CONF['integration']['device_token'] and CLIMATE_CONTROLLER and STATUS['wlan'] == network.STA_IF:
-    LOOP.create_task(post_sensor_data())
+DEVICE.start_async()
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)

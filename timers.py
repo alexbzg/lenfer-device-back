@@ -7,8 +7,9 @@ from ds3231_port import DS3231
 
 class RtcController:
 
-    def __init__(self, scl_pin_no=0, sda_pin_no=2):
-        self.i2c = I2C(-1, Pin(scl_pin_no, Pin.OPEN_DRAIN), Pin(sda_pin_no, Pin.OPEN_DRAIN))
+    def __init__(self, conf, i2c_conf):
+        i2c_rtc = i2c_conf[conf["i2c"]]
+        self.i2c = I2C(-1, Pin(i2c_rtc["scl"], Pin.OPEN_DRAIN), Pin(i2c_rtc["sda"], Pin.OPEN_DRAIN))
 
     def get_time(self, set_rtc=False):
         ds3231 = DS3231(self.i2c)
@@ -22,6 +23,13 @@ class RtcController:
         rtc = RTC()
         rtc.init(datetime_tuple)
         self.save_time()
+
+    async def adjust_time(self):
+        while True:
+            self.get_time(set_rtc=True)
+            await uasyncio.sleep(600)
+            gc.collect()
+
 
 def timer_minutes(entry):
     return int(entry['hr'])*60 + int(entry['mn'])

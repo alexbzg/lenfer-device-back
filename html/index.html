@@ -596,7 +596,10 @@
 	<div id="manual_start">
 		<div id="manual_counter" x-text="relay.elapsed_text">
 		</div>
-		<button id="manual_button" @mousedown="relay.switch(true)" @mouseup="relay.switch(false)">РУЧНОЙ ПУСК</button>
+		<button id="manual_button" @mousedown="relay.switch(true)" @mouseup="relay.switch(false)"
+			@touchstart="relay.switch(true)" @touchend="relay.switch(false)" @touchcancel="relay.switch(false)">
+			РУЧНОЙ ПУСК
+		</button>
 	</div>
 </div>
 
