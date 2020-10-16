@@ -113,10 +113,12 @@ def get_sensors_info(req, rsp):
     ctrl = DEVICE.modules[ctrl_type]
     if ctrl and hasattr(ctrl, 'sensors_roles'):
         await send_json(rsp, [
-            {'type': _type, 'sensors': [
-                {'id': _id, 'title': ctrl.sensors_titles[str(_id)]}
-                for _id in sensors
-            ]} for _type, sensors in ctrl.sensors_roles.items()
+            {'type': _type,
+             'limits': ctrl.limits[_type],
+             'sensors': [
+                 {'id': _id, 'title': ctrl.sensors_titles[str(_id)]}
+                 for _id in sensors
+             ]} for _type, sensors in ctrl.sensors_roles.items()
         ])
     else:
         gc.collect()
@@ -126,9 +128,7 @@ def get_sensors_data(req, rsp):
     ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
     ctrl = DEVICE.modules[ctrl_type]
     if ctrl and hasattr(ctrl, 'data'):
-        await send_json(rsp, [
-            {'id': _id, 'value': value}  for _id, value in ctrl.data.items()
-        ])
+        await send_json(rsp, {str(_id): value  for _id, value in ctrl.data.items()})
     else:
         gc.collect()
 
