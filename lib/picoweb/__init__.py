@@ -71,14 +71,14 @@ class HTTPRequest:
         pass
 
     def read_form_data(self):
-        size = int(self.headers[b"content-length"])
+        size = int(self.headers["content-length"])
         data = yield from self.reader.readexactly(size)
         form = parse_qs(data.decode())
         self.form = form
 
     def read_json(self):
         print(self.headers)
-        size = int(self.headers[b"content-length"])
+        size = int(self.headers["content-length"])
         data = yield from self.reader.readexactly(size)
         self.json = ujson.loads(data.decode())
 
@@ -113,7 +113,7 @@ class WebApp:
             if l == b"\r\n":
                 break
             k, v = l.split(b":", 1)
-            headers[k.lowercase()] = v.strip()
+            headers[k.decode('utf-8').lower()] = v.strip()
         return headers
 
     def _handle(self, reader, writer):

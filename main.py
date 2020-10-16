@@ -1,18 +1,13 @@
 import gc
 from time import sleep
+import re
 
 import uasyncio
 import network
 import machine
-from machine import WDT, Pin, I2C
+from machine import WDT, Pin
 import ujson
-import utime
 import ulogging
-import onewire
-
-import urequests
-
-import ds18x20
 
 import picoweb
 
@@ -24,17 +19,17 @@ LOG = ulogging.getLogger("Main")
 
 CONF = {}
 def save_conf():
-    with open('conf.json', 'w') as _conf_file:
+    with open('conf.json', 'w', encoding="utf-8") as _conf_file:
         _conf_file.write(ujson.dumps(CONF))
 
 def load_def_conf():
     global CONF
-    with open('conf_default.json', 'r') as conf_def_file:
+    with open('conf_default.json', 'r', encoding="utf-8") as conf_def_file:
         CONF = ujson.load(conf_def_file)
         print('default config loaded')
         save_conf()
 try:
-    with open('conf.json', 'r') as conf_file:
+    with open('conf.json', 'r', encoding="utf-8") as conf_file:
         CONF = ujson.load(conf_file)
         if CONF:
             print('config loaded')
@@ -79,7 +74,7 @@ def factory_reset_irq(pin):
         if not DEVICE.status['factory_reset']:
             DEVICE.status['factory_reset'] = 'pending'
             uasyncio.get_event_loop().create_task(factory_reset())
-    
+
 async def factory_reset():
     LOG.info('factory reset is pending')
     for co in range(50):
@@ -99,7 +94,7 @@ FACTORY_RESET_BUTTON.irq(factory_reset_irq)
 
 async def send_json(rsp, data):
     await picoweb.start_response(rsp, 'application/json', "200", {'cache-control': 'no-store'})
-    await rsp.awrite(ujson.dumps(data))
+    await rsp.awrite(ujson.dumps(data).encode('UTF-8'))
     gc.collect()
 
 @APP.route('/api/climate/limits')
@@ -111,6 +106,31 @@ def limits(req, rsp):
             ctrl.limits.update(req.json)
             save_conf()
         await send_json(rsp, ctrl.limits)
+
+@APP.route(re.compile(r'/api/(\w+)/sensors/info'))
+def get_sensors_info(req, rsp):
+    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
+    ctrl = DEVICE.modules[ctrl_type]
+    if ctrl and hasattr(ctrl, 'sensors_roles'):
+        await send_json(rsp, [
+            {'type': _type, 'sensors': [
+                {'id': _id, 'title': ctrl.sensors_titles[str(_id)]}
+                for _id in sensors
+            ]} for _type, sensors in ctrl.sensors_roles.items()
+        ])
+    else:
+        gc.collect()
+
+@APP.route(re.compile(r'/api/(\w+)/sensors/data'))
+def get_sensors_data(req, rsp):
+    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
+    ctrl = DEVICE.modules[ctrl_type]
+    if ctrl and hasattr(ctrl, 'data'):
+        await send_json(rsp, [
+            {'id': _id, 'value': value}  for _id, value in ctrl.data.items()
+        ])
+    else:
+        gc.collect()
 
 @APP.route('/api/timers')
 def timers(req, rsp):

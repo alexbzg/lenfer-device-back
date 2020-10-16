@@ -92,6 +92,7 @@ class ClimateController:
 
         self.limits = conf['limits']
         self.sensors_roles = conf['sensors_roles']
+        self.sensors_titles = conf['sensors_titles']
         self._switches = conf['switches']
         self._sleep = conf['sleep']
         self.data = {}
