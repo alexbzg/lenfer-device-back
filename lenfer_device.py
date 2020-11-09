@@ -20,6 +20,8 @@ from relay import RelaysController
 
 LOG = ulogging.getLogger("Main")
 
+SERVER_URI = "http://my.lenfer.ru"
+
 class LenferDevice:
 
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor"]
@@ -27,9 +29,11 @@ class LenferDevice:
     def __init__(self, conf):
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in conf['i2c']]
-        self.status = {"wlan": None, "factory_reset": False}
+        self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False}
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in conf['leds'].items()}
         self._conf = conf
+        with open('id.json', 'r') as file_id:
+            self.id = ujson.load(file_id)
         for led in self.leds.values():
             led.off()
         for module, module_conf in conf['modules'].items():
@@ -61,6 +65,7 @@ class LenferDevice:
 
     async def bg_leds(self):
         while True:
+            self.WDT.feed()
             await self.blink(("status",), 1 if self.status["wlan"] == network.AP_IF else 2, 100)
             await uasyncio.sleep(5)
             gc.collect()
@@ -74,8 +79,8 @@ class LenferDevice:
                 time_tuple = machine.RTC().datetime()
                 tstamp = "{0:d}/{1:d}/{2:d} {4:d}:{5:d}".format(*time_tuple)
                 data = {
-                    'device_id': self._conf['integration']['device_id'],
-                    'token': self._conf['integration']['device_token'],
+                    'device_id': self.id['id'],
+                    'token': self.id['token'],
                     'data': []
                 }
                 for ctrl in self.modules.values():
@@ -83,7 +88,7 @@ class LenferDevice:
                         data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                             for _id, value in ctrl.data.items()]
                 print(data)
-                rsp = urequests.post(self._conf['integration']['server_url'] + '/api/sensors_data', json=data)
+                rsp = urequests.post(SERVER_URI + '/api/sensors_data', json=data)
                 print('post finished')
                 print(rsp.text)
             except Exception as exc:
@@ -95,11 +100,12 @@ class LenferDevice:
             gc.collect()
 
     def start_async(self):
+        self.WDT = WDT(timeout=20000)        
         loop = uasyncio.get_event_loop()        
         loop.create_task(self.bg_leds())
         if self.modules['climate']:
             loop.create_task(self.modules['climate'].read())
-            if self._conf['integration']['device_token'] and self.status['wlan'] == network.STA_IF:
+            if self.status['wlan'] == network.STA_IF:
                 loop.create_task(self.post_sensor_data())
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())

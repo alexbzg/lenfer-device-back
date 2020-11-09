@@ -98,8 +98,11 @@ class ClimateController:
         self.data = {}
         self.sensor_devices = []
         self.heat = Pin(conf["switches"]['heat'], Pin.OUT)
+        self.heat.value(0)
         self.vent_out = Pin(conf["switches"]['vent_out'], Pin.OUT)
+        self.vent_out.value(0)
         self.vent_mix = Pin(conf["switches"]['vent_mix'], Pin.OUT)
+        self.vent_mix.value(0)
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, i2c_list))
@@ -119,23 +122,45 @@ class ClimateController:
                     self.data[self.sensors_roles['temperature'][0]],
                     self.data[self.sensors_roles['temperature'][1]]
                     ]
+                temp_limits = [
+                    self.limits['temperature'][0] - self.limits['temperature'][1],
+                    self.limits['temperature'][0] + self.limits['temperature'][1],
+                ]
                 humid = self.data[self.sensors_roles['humidity'][0]]
+                humid_limits = [
+                    self.limits['humidity'][0] - self.limits['humidity'][1],
+                    self.limits['humidity'][0] + self.limits['humidity'][1],
+                ]
                 if temp[0]:
-                    if temp[0] < self.limits['temperature'][0]:
-                        self.heat.value(1)
-                    elif temp[0] > self.limits['temperature'][0] + 2:
-                        self.heat.value(0)
+                    if temp[0] < temp_limits[0]:
+                        if not self.heat.value():
+                            self.heat.value(1)
+                            LOG.info('Heat on')
+                    else:
+                        if self.heat.value():
+                            self.heat.value(0)
+                            LOG.info('Heat off')
                     if temp[1]:
                         if temp[0] > temp[1] + 3 or temp[0] < temp[1] - 3:
-                            self.vent_mix.value(1)
+                            if not self.vent_mix.value():
+                                self.vent_mix.value(1)
+                                LOG.info('Mix on')
                         elif temp[0] < temp[1] + 1 and temp[0] > temp[1] - 1:
-                            self.vent_mix.value(0)
+                            if self.vent_mix.value():
+                                self.vent_mix.value(0)
+                                LOG.info('Mix off') 
                 if not temp[0] or not temp[1]:
-                    self.vent_mix.value(0)
-                if (humid and humid > self.limits['humidity'][1]) or\
-                    (temp[0] and temp[0] > self.limits['temperature'][1]):
-                    self.vent_out.value(1)
-                elif (not humid or humid < self.limits['humidity'][1] - 5) and\
-                    (not temp[0] or temp[0] < self.limits['temperature'][1] - 2):
-                    self.vent_out.value(0)
+                    if self.vent_mix.value():
+                        self.vent_mix.value(0)
+                        LOG.info('Mix off')
+                if (humid and humid > humid_limits[1]) or\
+                    (temp[0] and temp[0] > temp_limits[1]):
+                    if not self.vent_out.value():
+                        self.vent_out.value(1)
+                        LOG.info('Out on')
+                elif (not humid or humid < humid_limits[1]) and\
+                    (not temp[0] or temp[0] < temp_limits[1]):
+                    if self.vent_out.value():
+                        self.vent_out.value(0)
+                        LOG.info('Out off')
             gc.collect()

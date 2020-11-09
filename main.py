@@ -5,7 +5,7 @@ import re
 import uasyncio
 import network
 import machine
-from machine import WDT, Pin
+from machine import Pin
 import ujson
 import ulogging
 
@@ -41,19 +41,21 @@ if not CONF:
 
 DEVICE = LenferDevice(CONF)
 
+nic = None
 nic = network.WLAN(network.STA_IF)
 nic.active(True)
-WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
-print(WLANS_AVAILABLE)
+#WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
+#print(WLANS_AVAILABLE)
 HOST = '0.0.0.0'
-if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] in WLANS_AVAILABLE:
+if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] != '-':
     try:
         nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
         sleep(5)
         HOST = nic.ifconfig()[0]
     except Exception as exc:
         LOG.exc(exc, 'WLAN connect error')
-if nic.isconnected():
+
+if nic and nic.isconnected():
     DEVICE.status["wlan"] = network.STA_IF
 else:
     AP = network.WLAN(network.AP_IF)
@@ -65,6 +67,14 @@ else:
         CONF['wlan']['address'], CONF['wlan']['address']))
     HOST = CONF['wlan']['address']
     DEVICE.status["wlan"] = network.AP_IF
+
+def wlan_switch_irq(pin):
+    if pin.value():
+        LOG.info('wlan switch was activated')
+        DEVICE.status['wlan_switch'] = 'true'
+
+WLAN_SWITCH_BUTTON = Pin(CONF['wlan_switch'], Pin.IN)
+WLAN_SWITCH_BUTTON.irq(wlan_switch_irq)
 
 def factory_reset_irq(pin):
     if pin.value():
@@ -207,8 +217,16 @@ def relay_api(req, rsp):
 def get_modules(req, rsp):
     await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
 
-#DEV_WDT = WDT(timeout=5000)
+async def check_wlan_switch():
+    while True:
+        await uasyncio.sleep(5)
+        if DEVICE.status['wlan_switch']:
+            CONF['wlan']['ssid'] = '-'
+            save_conf()
+            machine.reset()
+
 
 DEVICE.start_async()
+uasyncio.get_event_loop().create_task(check_wlan_switch())
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)
