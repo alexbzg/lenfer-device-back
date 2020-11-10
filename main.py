@@ -54,16 +54,20 @@ nic.active(True)
 HOST = '0.0.0.0'
 if CONF['wlan']['enable_ssid'] and CONF['wlan']['ssid']:
     try:
+        DEVICE.status["ssid_failure"] = True
         nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
         sleep(5)
         HOST = nic.ifconfig()[0]
     except Exception as exc:
         LOG.exc(exc, 'WLAN connect error')
-        DEVICE.status["ssid_failure"] = True
+        
 
 if nic and nic.isconnected():
     DEVICE.status["wlan"] = network.STA_IF
+    DEVICE.status["ssid_failure"] = False
 else:
+    if nic:
+        nic.active(False)
     AP = network.WLAN(network.AP_IF)
     AP.active(True)
     authmode = 4 if CONF['wlan']['ap_key'] else 0
@@ -79,7 +83,7 @@ def wlan_switch_irq(pin):
         LOG.info('wlan switch was activated')
         DEVICE.status['wlan_switch'] = 'true'
 
-WLAN_SWITCH_BUTTON = Pin(CONF['wlan_switch'], Pin.IN)
+WLAN_SWITCH_BUTTON = Pin(CONF['wlan_switch'], Pin.IN, Pin.PULL_UP)
 WLAN_SWITCH_BUTTON.irq(wlan_switch_irq)
 
 def factory_reset_irq(pin):
@@ -104,9 +108,9 @@ async def factory_reset():
     load_def_conf()
     save_conf()
     machine.reset()
-
-FACTORY_RESET_BUTTON = Pin(CONF['factory_reset'], Pin.IN)
-FACTORY_RESET_BUTTON.irq(factory_reset_irq)
+if 'factory_reset' in CONF and CONF['factory_reset']:
+    FACTORY_RESET_BUTTON = Pin(CONF['factory_reset'], Pin.IN)
+    FACTORY_RESET_BUTTON.irq(factory_reset_irq)
 
 async def send_json(rsp, data):
     await picoweb.start_response(rsp, 'application/json', "200", {'cache-control': 'no-store'})
@@ -234,7 +238,7 @@ def get_modules(req, rsp):
 async def check_wlan_switch():
     while True:
         await uasyncio.sleep(5)
-        if DEVICE.status['wlan_switch']:
+        if DEVICE.status['wlan_switch'] and DEVICE.status['wlan'] == network.STA_IF:
             enable_ssid(False)
 
 def enable_ssid(val):

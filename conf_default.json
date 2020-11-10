@@ -1,0 +1,72 @@
+{
+    "wlan": {
+        "name": "ClimatControl",
+        "ap_key": "",
+        "address": "192.168.0.1",
+        "mask": "255.255.255.0",
+        "authmode": 4,
+        "ssid": "",
+        "key": "",
+        "enable_ssid": true
+    },
+    "modules": {
+        "climate": {
+            "enabled": true,
+            "sensor_devices": [
+                {
+                    "type": "bme280",
+                    "i2c": 0,
+                    "sensors_ids": [2, 3]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [4]
+                }
+            ],
+            "switches": {
+                "heat": 33,
+                "vent_out": 32,
+                "vent_mix": 13
+            },
+            "sensors_roles": {
+                "temperature": [2,4],
+                "humidity": [3]
+            },
+            "sensors_titles": {
+                "2": "низ",
+                "3": "низ",
+                "4": "верх"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": [60, 10]
+            },
+            "sleep": 750
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        },
+        "relays": {
+            "enabled": false,
+            "buttons": [],
+            "relays": [],
+            "timers": []
+        },
+        "power_monitor": {
+            "enabled": false
+        }
+    },
+    "sleep": 750,
+    "i2c": [{
+        "scl": 16,
+        "sda": 21
+    }],
+    "ow": [23],
+    "leds": {
+        "status": 25
+    },
+    "factory_reset": false,
+    "wlan_switch": 35
+}
