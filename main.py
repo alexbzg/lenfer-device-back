@@ -17,11 +17,14 @@ APP = picoweb.WebApp(__name__)
 
 LOG = ulogging.getLogger("Main")
 
+DEVICE = None
+
 CONF = {}
 def save_conf():
     with open('conf.json', 'w', encoding="utf-8") as _conf_file:
         _conf_file.write(ujson.dumps(CONF))
-    DEVICE.status["ssid_delay"] = True
+    if DEVICE:
+        DEVICE.status["ssid_delay"] = True
 
 def load_def_conf():
     global CONF
@@ -178,7 +181,7 @@ def get_wlan_settings(req, rsp):
         CONF['wlan'].update(req.json)
         save_conf()
         await picoweb.start_response(rsp, "text/plain")
-        await rsp.awrite("Ok")
+        await send_json(rsp, {"reset": reset_flag})
         await uasyncio.sleep(5)
         if reset_flag:
             machine.reset()
