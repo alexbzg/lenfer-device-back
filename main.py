@@ -21,6 +21,7 @@ CONF = {}
 def save_conf():
     with open('conf.json', 'w', encoding="utf-8") as _conf_file:
         _conf_file.write(ujson.dumps(CONF))
+    DEVICE.status["ssid_delay"] = True
 
 def load_def_conf():
     global CONF
@@ -42,18 +43,20 @@ if not CONF:
 DEVICE = LenferDevice(CONF)
 
 nic = None
+WLANS_AVAILABLE = None
 nic = network.WLAN(network.STA_IF)
 nic.active(True)
 #WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
 #print(WLANS_AVAILABLE)
 HOST = '0.0.0.0'
-if 'ssid' in CONF['wlan'] and CONF['wlan']['ssid'] != '-':
+if CONF['wlan']['enable_ssid'] and CONF['wlan']['ssid']:
     try:
         nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
         sleep(5)
         HOST = nic.ifconfig()[0]
     except Exception as exc:
         LOG.exc(exc, 'WLAN connect error')
+        DEVICE.status["ssid_failure"] = True
 
 if nic and nic.isconnected():
     DEVICE.status["wlan"] = network.STA_IF
@@ -165,12 +168,20 @@ def timers(req, rsp):
 def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
+        reset_flag = (CONF['wlan']['enable_ssid'] != req.json['enable_ssid']) or\
+            (req.json['enable_ssid'] and\
+                (CONF['wlan']['ssid'] != req.json['ssid'] or\
+                    CONF['wlan']['key'] != req.json['key'])) or\
+            ((not req.json['enable_ssid']) and\
+                (CONF['wlan']['name'] != req.json['name'] or\
+                    CONF['wlan']['ap_key'] != req.json['ap_key']))
         CONF['wlan'].update(req.json)
         save_conf()
         await picoweb.start_response(rsp, "text/plain")
         await rsp.awrite("Ok")
         await uasyncio.sleep(5)
-        machine.reset()
+        if reset_flag:
+            machine.reset()
     else:
         await send_json(rsp, CONF['wlan'])
 
@@ -221,12 +232,26 @@ async def check_wlan_switch():
     while True:
         await uasyncio.sleep(5)
         if DEVICE.status['wlan_switch']:
-            CONF['wlan']['ssid'] = '-'
-            save_conf()
-            machine.reset()
+            enable_ssid(False)
 
+def enable_ssid(val):
+    CONF['wlan']['enable_ssid'] = val
+    save_conf()
+    machine.reset()
+
+async def delayed_ssid_switch():
+    LOG.info("delayed wlan switch activated")
+    while True:
+        await uasyncio.sleep(120)
+        if DEVICE.status["ssid_delay"]:
+            DEVICE.status["ssid_delay"] = False
+        else:
+            enable_ssid(True)
 
 DEVICE.start_async()
-uasyncio.get_event_loop().create_task(check_wlan_switch())
+LOOP = uasyncio.get_event_loop()
+LOOP.create_task(check_wlan_switch())
+if DEVICE.status['wlan'] == network.AP_IF and (not DEVICE.status["ssid_failure"]) and CONF['wlan']['ssid']:
+    LOOP.create_task(delayed_ssid_switch())
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)

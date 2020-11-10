@@ -29,7 +29,7 @@ class LenferDevice:
     def __init__(self, conf):
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in conf['i2c']]
-        self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False}
+        self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False, "ssid_failure": False, "ssid_delay": False}
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in conf['leds'].items()}
         self._conf = conf
         with open('id.json', 'r') as file_id:
