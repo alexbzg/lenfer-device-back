@@ -5,6 +5,7 @@ import machine
 import uasyncio
 
 from timers import Timer
+from lenfer_controller import LenferController
 
 class Relay:
 
@@ -26,10 +27,10 @@ class Relay:
     def off(self, source='timer'):
         self.on(False, source)
 
-class RelaysController:
+class RelaysController(LenferController):
 
     def __init__(self, conf):
-
+        LenferController.__init__(self)
         self.relays = [Relay(pin_no) for pin_no in conf["relays"]]
         self._conf = conf
 

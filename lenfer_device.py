@@ -20,13 +20,14 @@ from relay import RelaysController
 
 LOG = ulogging.getLogger("Main")
 
-SERVER_URI = "http://my.lenfer.ru"
+SERVER_URI = "http://dev-api.lenfer.ru"
 
 class LenferDevice:
 
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor"]
 
     def __init__(self, conf):
+        self._schedule = None
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in conf['i2c']]
         self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False, "ssid_failure": False, "ssid_delay": False}
@@ -50,6 +51,22 @@ class LenferDevice:
                     LOG.exc(exc, 'Controller initialization error')
                     LOG.error(module)
                     LOG.error(module_conf)
+        with open('schedule.json', 'r') as file_schedule:
+            self.schedule = ujson.load(file_schedule)
+
+    @property
+    def schedule(self):
+        return self._schedule
+
+    @schedule.setter
+    def schedule(self, value):
+        if self._schedule:
+            with open('schedule.json', 'w', encoding="utf-8") as schedule_file:
+                schedule_file.write(ujson.dumps(value))
+        self._schedule = value
+        for ctrl in self.modules.values():
+            if ctrl and hasattr(ctrl, 'schedule'):
+                ctrl.schedule = value
 
     async def blink(self, leds, count, time_ms):
         for co in range(count):
@@ -68,6 +85,34 @@ class LenferDevice:
             self.WDT.feed()
             await self.blink(("status",), 1 if self.status["wlan"] == network.AP_IF else 2, 100)
             await uasyncio.sleep(5)
+            gc.collect()
+
+    async def check_updates(self):
+        rsp = None
+        while True:
+            await uasyncio.sleep(30)
+            try:
+                print('updates check')
+                data = {
+                    'device_id': self.id['id'],
+                    'token': self.id['token'],
+                    'schedule': {
+                        'hash': self.schedule['hash'],
+                        'start': self.schedule['start']
+                    }
+                }
+                rsp = urequests.post(SERVER_URI + '/api/device_updates', json=data)
+                print('post finished')
+                print(rsp.text)
+                updates = ujson.loads(rsp.text)
+                if 'schedule' in updates:
+                    self.schedule = updates['schedule']
+            except Exception as exc:
+                LOG.exc(exc, 'Check updates error')
+            if rsp:
+                rsp.close()
+                rsp = None
+            print("mem_free: " + str(gc.mem_free()))
             gc.collect()
 
     async def post_sensor_data(self):
@@ -107,6 +152,7 @@ class LenferDevice:
             loop.create_task(self.modules['climate'].read())
             if self.status['wlan'] == network.STA_IF:
                 loop.create_task(self.post_sensor_data())
+                loop.create_task(self.check_updates())
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
         if self.modules['relays']:

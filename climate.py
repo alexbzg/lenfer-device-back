@@ -1,13 +1,15 @@
 import gc
-import uasyncio
-import ulogging
-
+import utime
+import machine
 from machine import Pin
 import ds18x20
 import onewire
 
-import BME280
+import uasyncio
+import ulogging
 
+import BME280
+from lenfer_controller import LenferController
 
 LOG = ulogging.getLogger("Climate")
 
@@ -86,10 +88,10 @@ class SensorDeviceDS18x20(SensorDevice):
             finally:
                 self._convert = False
 
-class ClimateController:
+class ClimateController(LenferController):
 
     def __init__(self, conf, i2c_list, ow_list):
-
+        LenferController.__init__(self)
         self.limits = conf['limits']
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
@@ -122,15 +124,41 @@ class ClimateController:
                     self.data[self.sensors_roles['temperature'][0]],
                     self.data[self.sensors_roles['temperature'][1]]
                     ]
-                temp_limits = [
-                    self.limits['temperature'][0] - self.limits['temperature'][1],
-                    self.limits['temperature'][0] + self.limits['temperature'][1],
-                ]
                 humid = self.data[self.sensors_roles['humidity'][0]]
-                humid_limits = [
-                    self.limits['humidity'][0] - self.limits['humidity'][1],
-                    self.limits['humidity'][0] + self.limits['humidity'][1],
-                ]
+                temp_limits, humid_limits = None, None
+                if self.schedule and self.schedule['items'] and self.schedule['start']:
+                    day_no = 0
+                    start = utime.mktime(self.schedule['start'])
+                    today = utime.mktime(machine.RTC().datetime())
+                    if start < today:
+                        day_no = int((today-start)/86400)
+                    if day_no >= len(self.schedule['items']):
+                        day_no = len(self.schedule['items']) - 1
+                    day = self.schedule['items'][day_no]
+                    print('schedule day: ' + str(day_no))
+                    temp_limits = [
+                        float(day['params']['temperature']['value']) - 0.1,
+                        float(day['params']['temperature']['value']) + 0.1,
+                    ]
+                    print('temp limits: ')
+                    print(temp_limits)
+
+                    humid_limits = [
+                        float(day['params']['humidity']['value']) - 0.1,
+                        float(day['params']['humidity']['value']) + 0.1,
+                    ]
+
+                else:
+                    temp_limits = [
+                        self.limits['temperature'][0] - self.limits['temperature'][1],
+                        self.limits['temperature'][0] + self.limits['temperature'][1],
+                    ]
+
+                    humid_limits = [
+                        self.limits['humidity'][0] - self.limits['humidity'][1],
+                        self.limits['humidity'][0] + self.limits['humidity'][1],
+                    ]
+
                 if temp[0]:
                     if temp[0] < temp_limits[0]:
                         if not self.heat.value():

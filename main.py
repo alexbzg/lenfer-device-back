@@ -54,7 +54,6 @@ nic.active(True)
 HOST = '0.0.0.0'
 if CONF['wlan']['enable_ssid'] and CONF['wlan']['ssid']:
     try:
-        DEVICE.status["ssid_failure"] = True
         nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
         sleep(5)
         HOST = nic.ifconfig()[0]
@@ -64,7 +63,6 @@ if CONF['wlan']['enable_ssid'] and CONF['wlan']['ssid']:
 
 if nic and nic.isconnected():
     DEVICE.status["wlan"] = network.STA_IF
-    DEVICE.status["ssid_failure"] = False
 else:
     if nic:
         nic.active(False)
@@ -258,7 +256,7 @@ async def delayed_ssid_switch():
 DEVICE.start_async()
 LOOP = uasyncio.get_event_loop()
 LOOP.create_task(check_wlan_switch())
-if DEVICE.status['wlan'] == network.AP_IF and (not DEVICE.status["ssid_failure"]) and CONF['wlan']['ssid']:
+if DEVICE.status['wlan'] == network.AP_IF and CONF['wlan']['ssid']:
     LOOP.create_task(delayed_ssid_switch())
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)
