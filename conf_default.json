@@ -22,6 +22,11 @@
                     "type": "ds18x20",
                     "ow": 0,
                     "sensors_ids": [4]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [5]
                 }
             ],
             "switches": {
@@ -30,13 +35,14 @@
                 "vent_mix": 13
             },
             "sensors_roles": {
-                "temperature": [2,4],
+                "temperature": [2,4,5],
                 "humidity": [3]
             },
             "sensors_titles": {
                 "2": "низ",
                 "3": "низ",
-                "4": "верх"
+                "4": "верх",
+                "5": "снаружи"
             },
             "limits": {
                 "temperature": [20, 0.1],
@@ -63,7 +69,7 @@
         "scl": 16,
         "sda": 21
     }],
-    "ow": [23],
+    "ow": [23, 22],
     "leds": {
         "status": 25
     },

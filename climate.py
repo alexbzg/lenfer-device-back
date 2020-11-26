@@ -136,16 +136,18 @@ class ClimateController(LenferController):
                         day_no = len(self.schedule['items']) - 1
                     day = self.schedule['items'][day_no]
                     print('schedule day: ' + str(day_no))
+                    temp_delta = float(day['params']['temperature']['delta']) if 'delta' in day['params']['temperature'] else 0.1
                     temp_limits = [
-                        float(day['params']['temperature']['value']) - 0.1,
-                        float(day['params']['temperature']['value']) + 0.1,
+                        float(day['params']['temperature']['value']) - temp_delta,
+                        float(day['params']['temperature']['value']) + temp_delta,
                     ]
                     print('temp limits: ')
                     print(temp_limits)
 
+                    humid_delta = float(day['params']['humidity']['delta']) if 'delta' in day['params']['humidity'] else 1
                     humid_limits = [
-                        float(day['params']['humidity']['value']) - 0.1,
-                        float(day['params']['humidity']['value']) + 0.1,
+                        float(day['params']['humidity']['value']) - humid_delta,
+                        float(day['params']['humidity']['value']) + humid_delta,
                     ]
 
                 else:
