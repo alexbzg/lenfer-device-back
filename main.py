@@ -44,6 +44,7 @@ if not CONF:
     load_def_conf()
 
 DEVICE = LenferDevice(CONF)
+LOOP = uasyncio.get_event_loop()
 
 nic = None
 WLANS_AVAILABLE = None
@@ -182,13 +183,15 @@ def get_wlan_settings(req, rsp):
                     CONF['wlan']['ap_key'] != req.json['ap_key']))
         CONF['wlan'].update(req.json)
         save_conf()
-        await picoweb.start_response(rsp, "text/plain")
-        await send_json(rsp, {"reset": reset_flag})
-        await uasyncio.sleep(5)
         if reset_flag:
-            machine.reset()
+            LOOP.create_task(delayed_reset(5))
+        await send_json(rsp, {"reset": reset_flag})
     else:
         await send_json(rsp, CONF['wlan'])
+
+async def delayed_reset(delay):
+    await uasyncio.sleep(delay)
+    machine.reset()
 
 @APP.route('/api/settings/wlan/scan')
 def get_wlan_scan(req, rsp):
@@ -254,7 +257,6 @@ async def delayed_ssid_switch():
             enable_ssid(True)
 
 DEVICE.start_async()
-LOOP = uasyncio.get_event_loop()
 LOOP.create_task(check_wlan_switch())
 if DEVICE.status['wlan'] == network.AP_IF and CONF['wlan']['ssid']:
     LOOP.create_task(delayed_ssid_switch())

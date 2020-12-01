@@ -52,7 +52,7 @@ class SensorDeviceDS18x20(SensorDevice):
     def __init__(self, conf, controller, ow_list):
         SensorDevice.__init__(self, conf, controller)
         print('ds18x20 init')
-        self._rom = None
+        self.rom = None
         self._ds = None
         _ow = ow_list[conf['ow']]
         if _ow:
@@ -126,7 +126,7 @@ class ClimateController(LenferController):
                     ]
                 humid = self.data[self.sensors_roles['humidity'][0]]
                 temp_limits, humid_limits = None, None
-                if self.schedule and self.schedule['items'] and self.schedule['start']:
+                if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
                     day_no = 0
                     start = utime.mktime(self.schedule['start'])
                     today = utime.mktime(machine.RTC().datetime())
