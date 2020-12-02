@@ -6,17 +6,11 @@ import network
 import machine
 from machine import WDT, Pin, I2C
 import ujson
-import utime
 import ulogging
-import onewire
 
 import urequests
 
-import ds18x20
-
-from climate import ClimateController
 from timers import RtcController, Timer
-from relay import RelaysController
 
 LOG = ulogging.getLogger("Main")
 
@@ -41,12 +35,17 @@ class LenferDevice:
             if module_conf['enabled']:
                 try:
                     if module == 'climate':
+                        from climate import ClimateController
                         self.modules[module] = ClimateController(module_conf, self.i2c, conf['ow'])
                     elif module == 'rtc':
                         self.modules[module] = RtcController(module_conf, conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
                     elif module == 'relays':
+                        from relay import RelaysController
                         self.modules[module] = RelaysController(module_conf)
+                    elif module == 'feeder':
+                        from feeder import FeederController
+                        self.modules[module] = FeederController(module_conf, conf['i2c'])
                 except Exception as exc:
                     LOG.exc(exc, 'Controller initialization error')
                     LOG.error(module)

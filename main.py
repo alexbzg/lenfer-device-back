@@ -142,18 +142,21 @@ def get_sensors_info(req, rsp):
     else:
         gc.collect()
 
+def get_ctrl(req):
+    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
+    return DEVICE.modules[ctrl_type]
+
 @APP.route(re.compile(r'/api/(\w+)/sensors/data'))
 def get_sensors_data(req, rsp):
-    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
-    ctrl = DEVICE.modules[ctrl_type]
+    ctrl = get_ctrl(req)
     if ctrl and hasattr(ctrl, 'data'):
         await send_json(rsp, {str(_id): value  for _id, value in ctrl.data.items()})
     else:
         gc.collect()
 
-@APP.route('/api/timers')
+@APP.route(re.compile(r'/api/(\w+)/timers'))
 def timers(req, rsp):
-    ctrl = DEVICE.modules['relays']
+    ctrl = get_ctrl(req)
     if ctrl:
         if req.method == 'POST':
             await req.read_json()
@@ -168,7 +171,7 @@ def timers(req, rsp):
             await req.read_json()
             ctrl.delete_timer(req.json)
             save_conf()
-        await send_json(rsp, CONF['timers'])
+        await send_json(rsp, ctrl._conf['timers'])
 
 @APP.route('/api/settings/wlan')
 def get_wlan_settings(req, rsp):

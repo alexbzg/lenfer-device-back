@@ -2,8 +2,11 @@ import gc
 from machine import Pin, I2C, RTC
 
 import uasyncio
+import ulogging
 
 from ds3231_port import DS3231
+
+LOG = ulogging.getLogger("Main")
 
 class RtcController:
 
