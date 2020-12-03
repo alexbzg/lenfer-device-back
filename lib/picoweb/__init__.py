@@ -77,7 +77,6 @@ class HTTPRequest:
         self.form = form
 
     def read_json(self):
-        print(self.headers)
         size = int(self.headers["content-length"])
         data = yield from self.reader.readexactly(size)
         self.json = ujson.loads(data.decode())

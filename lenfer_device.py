@@ -154,6 +154,7 @@ class LenferDevice:
                 loop.create_task(self.check_updates())
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
-        if self.modules['relays']:
-            loop.create_task(self.modules['relays'].check_timers())
+        for relay_module in ('relays', 'feeder'):
+            if self.modules[relay_module]:
+                loop.create_task(self.modules[relay_module].check_timers())
 

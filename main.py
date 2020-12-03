@@ -222,15 +222,14 @@ def get_index(req, rsp):
     await APP.sendfile(rsp, 'html/index.html', content_type="text/html; charset=utf-8")
     gc.collect()
 
-@APP.route('/api/relay')
+@APP.route(re.compile(r'/api/(\w+)/relay'))
 def relay_api(req, rsp):
-    ctrl = DEVICE.modules['relays']
-    if ctrl:
+    ctrl = get_ctrl(req)
+    if ctrl and hasattr(ctrl, 'relays'):
         if req.method == 'POST':
             await req.read_json()
             ctrl.relays[req.json['relay']].on(value=req.json['value'], source='manual')
-            await picoweb.start_response(rsp, 'text/plain', {'cache-control': 'no-store'})
-            await rsp.awrite('Ok')
+            await send_json(rsp, 'OK')
         else:
             await picoweb.start_response(rsp, status="405")
         gc.collect()
