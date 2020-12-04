@@ -45,12 +45,12 @@ class Timer:
     def __init__(self, conf, relay):
         self.timer_type = conf['timer_type']
         self.time_on = timer_minutes(conf['conf']['on'])
-        self.time_off = timer_minutes(conf['conf']['off'])
+        self.time_off = timer_minutes(conf['conf']['off']) if 'off' in conf['conf'] else None
         self.relay = relay
         self.active = False
         if self.timer_type == 'interval':
-            self.period = timer_minutes(conf['conf']['period'])
-            self.period_off = timer_seconds(conf['conf']['period_off'])
+            self.duration = conf['conf']['duration']
+            self.period = conf['conf']['period'] if 'period' in conf['conf'] else None
 
     def on(self, value=True):
         self.active = value
@@ -63,7 +63,7 @@ class Timer:
         self.on(False)
 
     async def delayed_off(self):
-        await uasyncio.sleep(self.period_off)
+        await uasyncio.sleep(self.duration)
         self.off()
 
     def on_off(self):
@@ -77,8 +77,8 @@ class Timer:
             elif self.time_off == time and self.active:
                 self.off()
         elif self.timer_type == 'interval':
-            if self.time_on == time and self.period == 0:
+            if self.time_on == time and not self.period:
                 self.on_off()
             elif self.period and self.time_on <= time < self.time_off and not self.active and\
-                ((time - self.time_on) % self.period) * 60 < self.period_off:
+                ((time - self.time_on) % self.period) * 60 < self.duration:
                 self.on_off()

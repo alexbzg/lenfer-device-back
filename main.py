@@ -162,7 +162,7 @@ def timers(req, rsp):
             await req.read_json()
             for key in req.json.keys():
                 timer_conf = req.json[key]
-                if key == 'new':
+                if key == '-1':
                     ctrl.add_timer(timer_conf)
                 else:
                     ctrl.update_timer(int(key), timer_conf)
@@ -228,7 +228,11 @@ def relay_api(req, rsp):
     if ctrl and hasattr(ctrl, 'relays'):
         if req.method == 'POST':
             await req.read_json()
+            if 'reverse' in req.json and hasattr(ctrl, 'reverse'):
+                ctrl.reverse = req.json['reverse']
             ctrl.relays[req.json['relay']].on(value=req.json['value'], source='manual')
+            if not req.json['value'] and hasattr(ctrl, 'reverse') and ctrl.reverse:
+                ctrl.reverse = False
             await send_json(rsp, 'OK')
         else:
             await picoweb.start_response(rsp, status="405")
