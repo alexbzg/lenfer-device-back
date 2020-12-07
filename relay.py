@@ -29,8 +29,8 @@ class Relay:
 
 class RelaysController(LenferController):
 
-    def __init__(self, conf):
-        LenferController.__init__(self)
+    def __init__(self, device, conf):
+        LenferController.__init__(self, device)
         self.relays = [Relay(pin_no) for pin_no in conf["relays"]]
         self._conf = conf
 

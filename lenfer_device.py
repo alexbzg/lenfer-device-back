@@ -14,7 +14,7 @@ from timers import RtcController, Timer
 
 LOG = ulogging.getLogger("Main")
 
-SERVER_URI = "http://dev-api.lenfer.ru"
+SERVER_URI = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
 
@@ -36,16 +36,16 @@ class LenferDevice:
                 try:
                     if module == 'climate':
                         from climate import ClimateController
-                        self.modules[module] = ClimateController(module_conf, self.i2c, conf['ow'])
+                        self.modules[module] = ClimateController(module_conf, self, conf['ow'])
                     elif module == 'rtc':
                         self.modules[module] = RtcController(module_conf, conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
                     elif module == 'relays':
                         from relay import RelaysController
-                        self.modules[module] = RelaysController(module_conf)
+                        self.modules[module] = RelaysController(self, module_conf)
                     elif module == 'feeder':
                         from feeder import FeederController
-                        self.modules[module] = FeederController(module_conf, conf['i2c'])
+                        self.modules[module] = FeederController(self, module_conf, conf['i2c'])
                 except Exception as exc:
                     LOG.exc(exc, 'Controller initialization error')
                     LOG.error(module)
@@ -115,33 +115,41 @@ class LenferDevice:
             gc.collect()
 
     async def post_sensor_data(self):
-        rsp = None
         while True:
             await uasyncio.sleep(60)
-            try:
-                print('posting sensors data')
-                time_tuple = machine.RTC().datetime()
-                tstamp = "{0:d}/{1:d}/{2:d} {4:d}:{5:d}".format(*time_tuple)
-                data = {
-                    'device_id': self.id['id'],
-                    'token': self.id['token'],
-                    'data': []
-                }
-                for ctrl in self.modules.values():
-                    if ctrl and hasattr(ctrl, 'data'):
-                        data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
-                            for _id, value in ctrl.data.items()]
-                print(data)
-                rsp = urequests.post(SERVER_URI + '/api/sensors_data', json=data)
-                print('post finished')
-                print(rsp.text)
-            except Exception as exc:
-                LOG.exc(exc, 'Data posting error')
-            if rsp:
-                rsp.close()
-                rsp = None
-            print("mem_free: " + str(gc.mem_free()))
-            gc.collect()
+            data = {'data': []}
+            tstamp = self.post_tstamp()
+            for ctrl in self.modules.values():
+                if ctrl and hasattr(ctrl, 'data'):
+                    data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
+                        for _id, value in ctrl.data.items()]
+            self.srv_post('sensors_data', data)
+
+    def post_log(self, entries):
+        tstamp = self.post_tstamp()
+        for entry in entries:
+            if not 'log_tstamp' in entry or not entry['log_tstamp']:
+                entry['log_tstamp'] = tstamp
+        self.srv_post('devices_log/post', {'entries': entries})
+
+    @staticmethod
+    def post_tstamp(time_tuple=None):
+        if not time_tuple:
+            time_tuple = machine.RTC().datetime()
+        return "{0:d}/{1:d}/{2:d} {4:d}:{5:d}".format(*time_tuple)
+
+    def srv_post(self, url, data):
+        rsp = None
+        try:
+            data['device_id'] = self.id['id']
+            data['token'] = self.id['token']
+            rsp = urequests.post(SERVER_URI + url, json=data)
+        except Exception as exc:
+            LOG.exc(exc, 'Data posting error')
+        if rsp:
+            rsp.close()
+            rsp = None
+        gc.collect()
 
     def start_async(self):
         self.WDT = WDT(timeout=20000)        

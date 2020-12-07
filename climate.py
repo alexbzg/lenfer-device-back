@@ -90,8 +90,8 @@ class SensorDeviceDS18x20(SensorDevice):
 
 class ClimateController(LenferController):
 
-    def __init__(self, conf, i2c_list, ow_list):
-        LenferController.__init__(self)
+    def __init__(self, device, conf, ow_list):
+        LenferController.__init__(self, device)
         self.limits = conf['limits']
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
@@ -107,7 +107,7 @@ class ClimateController(LenferController):
         self.vent_mix.value(0)
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
-                self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, i2c_list))
+                self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, ow_list))
 

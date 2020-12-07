@@ -20,9 +20,9 @@ class PowerMonitor:
 
 class FeederController(RelaysController):
 
-    def __init__(self, conf, i2c):
+    def __init__(self, device, conf, i2c):
 
-        RelaysController.__init__(self, conf['relays'])
+        RelaysController.__init__(self, device, conf['relays'])
         self._power_monitor = PowerMonitor(conf['power_monitor'], i2c)
         self._reverse = Relay(conf['reverse'])
         uasyncio.get_event_loop().create_task(self.power_monitor_check())
