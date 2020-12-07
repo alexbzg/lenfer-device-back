@@ -7,11 +7,22 @@ import uasyncio
 from timers import Timer
 from lenfer_controller import LenferController
 
-class Relay:
+class RelaysController(LenferController):
 
-    def __init__(self, pin_no):
-        self.pin = Pin(pin_no, Pin.OUT)
+    def __init__(self, device, conf):
+        LenferController.__init__(self, device)
+        self.pin = Pin(conf['pin'], Pin.OUT)
+        self._conf = conf
         self._active = {'timer': False, 'manual': False}
+
+        self.timers = []
+        for timer_conf in conf['timers']:
+            self.timers.append(self.create_timer(timer_conf))
+
+        self.button = Pin(conf['button'], Pin.IN) if conf["button"] else None
+
+        if self.button:
+            self.button.irq(self.button_irq_hndlr)
 
     def on(self, value=True, source='timer'):
         if self._active[source] != value:
@@ -27,32 +38,12 @@ class Relay:
     def off(self, source='timer'):
         self.on(False, source)
 
-class RelaysController(LenferController):
-
-    def __init__(self, device, conf):
-        LenferController.__init__(self, device)
-        self.relays = [Relay(pin_no) for pin_no in conf["relays"]]
-        self._conf = conf
-
-        self.timers = []
-        for timer_conf in conf['timers']:
-            self.timers.append(self.create_timer(timer_conf))
-
-        self.buttons = [Pin(pin_no, Pin.IN) for pin_no in conf["buttons"]]
-
-        for idx in range(len(self.buttons)):
-            self.set_relay_button_irq(idx)
+    def button_irq_hndlr(self, pin):
+        self.on(value=not self.button.value(), source='manual')
+        gc.collect()
 
     def create_timer(self, conf):
-        return Timer(conf, self.relays[0])
-
-    def set_relay_button_irq(self, idx):
-
-        def handler(pin):
-            self.relays[idx].on(value=not self.buttons[idx].value(), source='manual')
-            gc.collect()
-
-        self.buttons[idx].irq(handler)
+        return Timer(conf, self)
 
     def add_timer(self, timer_conf):
         self.timers.append(self.create_timer(timer_conf))

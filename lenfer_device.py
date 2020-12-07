@@ -111,7 +111,6 @@ class LenferDevice:
             if rsp:
                 rsp.close()
                 rsp = None
-            print("mem_free: " + str(gc.mem_free()))
             gc.collect()
 
     async def post_sensor_data(self):
@@ -130,6 +129,7 @@ class LenferDevice:
         for entry in entries:
             if not 'log_tstamp' in entry or not entry['log_tstamp']:
                 entry['log_tstamp'] = tstamp
+        LOG.info(entries)
         self.srv_post('devices_log/post', {'entries': entries})
 
     @staticmethod
