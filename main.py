@@ -16,6 +16,7 @@ from lenfer_device import LenferDevice
 APP = picoweb.WebApp(__name__)
 
 LOG = ulogging.getLogger("Main")
+LOG.setLevel(ulogging.INFO)
 
 DEVICE = None
 
@@ -225,12 +226,12 @@ def get_index(req, rsp):
 @APP.route(re.compile(r'/api/(\w+)/relay'))
 def relay_api(req, rsp):
     ctrl = get_ctrl(req)
-    if ctrl and hasattr(ctrl, 'relays'):
+    if ctrl:
         if req.method == 'POST':
             await req.read_json()
             if 'reverse' in req.json and hasattr(ctrl, 'reverse'):
                 ctrl.reverse = req.json['reverse']
-            ctrl.relays[req.json['relay']].on(value=req.json['value'], source='manual')
+            ctrl.on(value=req.json['value'], source='manual')
             if not req.json['value'] and hasattr(ctrl, 'reverse') and ctrl.reverse:
                 ctrl.reverse = False
             await send_json(rsp, 'OK')

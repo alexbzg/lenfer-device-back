@@ -129,7 +129,7 @@ class ClimateController(LenferController):
                 if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
                     day_no = 0
                     start = utime.mktime(self.schedule['start'])
-                    today = utime.mktime(machine.RTC().datetime())
+                    today = utime.time()
                     if start < today:
                         day_no = int((today-start)/86400)
                     if day_no >= len(self.schedule['items']):

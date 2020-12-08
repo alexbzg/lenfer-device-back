@@ -1,5 +1,6 @@
-from machine import Pin, I2C
+from machine import Pin, I2C, RTC
 import uasyncio
+import utime
 
 from ina219 import INA219
 
@@ -28,7 +29,7 @@ class FeederController(RelaysController):
 
     def __init__(self, device, conf, i2c):
 
-        RelaysController.__init__(self, device, conf['relays'])
+        RelaysController.__init__(self, device, conf['relay'])
         self._power_monitor = PowerMonitor(conf['power_monitor'], i2c)
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self._delay = 0
@@ -39,28 +40,39 @@ class FeederController(RelaysController):
 
     @state.setter
     def state(self, value):
+        self.on(value=value)
+
+    def on(self, value=True, source='timer'):
         if self.state != value:
-            self.on(value=value)
+            RelaysController.on(self, value, source)
             self.device.post_log("Feeder: {0} Reverse: {1}".format(self.state, self.reverse))
 
-    async def run_for(self, duration, reverse=False):
-        if self._active['timer'] and not reverse:
-            return
-        self._active['timer'] = True
-        self.state = False
-        self.reverse = reverse
-        self.state = True
+    async def run_for(self, duration):
+        start = utime.time()
+        now = start
         expired = 0
         retries = 0
-        while expired < duration and retries < 3:
+        self.on()
+        while now - start < duration and retries < 3:
             await uasyncio.sleep(1)
+            now = utime.time()
             cur = self._power_monitor.current()
-            self.device.post_log("Feeder current: {0:d}".format(cur))
+            self.device.post_log("Feeder current: {0:+.2f}".format(cur))
+            expired = now - start
             if cur > 1000:
-                await self.run_for(5, True)
+                self.device.post_log("Feeder reverse")
+                self.engine_reverse(True)
+                await uasyncio.sleep(5)
                 expired -= 5
                 retries += 1
-            expired += 1
+                self.engine_reverse(False)
+                self.device.post_log("Feeder resume")
+        self.off()
+
+    def engine_reverse(self, reverse):
+        self.pin.value(False)
+        self.reverse = reverse
+        self.pin.value(True)
 
     def create_timer(self, conf):
         return FeederTimer(conf, self)
@@ -71,4 +83,4 @@ class FeederController(RelaysController):
 
     @reverse.setter
     def reverse(self, value):
-        self._reverse.on(value)
+        self._reverse.value(value)

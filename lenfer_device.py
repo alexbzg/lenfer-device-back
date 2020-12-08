@@ -18,7 +18,7 @@ SERVER_URI = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
 
-    MODULES_LIST = ["rtc", "climate", "relays", "power_monitor"]
+    MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
     def __init__(self, conf):
         self._schedule = None
@@ -36,7 +36,7 @@ class LenferDevice:
                 try:
                     if module == 'climate':
                         from climate import ClimateController
-                        self.modules[module] = ClimateController(module_conf, self, conf['ow'])
+                        self.modules[module] = ClimateController(self, module_conf, conf['ow'])
                     elif module == 'rtc':
                         self.modules[module] = RtcController(module_conf, conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
@@ -87,31 +87,20 @@ class LenferDevice:
             gc.collect()
 
     async def check_updates(self):
-        rsp = None
         while True:
-            await uasyncio.sleep(30)
-            try:
-                print('updates check')
-                data = {
-                    'device_id': self.id['id'],
-                    'token': self.id['token'],
-                    'schedule': {
-                        'hash': self.schedule['hash'],
-                        'start': self.schedule['start']
-                    }
+            data = {
+                'schedule': {
+                    'hash': self.schedule['hash'],
+                    'start': self.schedule['start']
                 }
-                rsp = urequests.post(SERVER_URI + '/api/device_updates', json=data)
-                print('post finished')
-                print(rsp.text)
-                updates = ujson.loads(rsp.text)
+            }
+            rsp = self.srv_post('device_updates', data)
+            if rsp:
+                LOG.info(rsp)
+                updates = ujson.loads(rsp)
                 if 'schedule' in updates:
                     self.schedule = updates['schedule']
-            except Exception as exc:
-                LOG.exc(exc, 'Check updates error')
-            if rsp:
-                rsp.close()
-                rsp = None
-            gc.collect()
+            await uasyncio.sleep(30)
 
     async def post_sensor_data(self):
         while True:
@@ -126,9 +115,13 @@ class LenferDevice:
 
     def post_log(self, entries):
         tstamp = self.post_tstamp()
-        for entry in entries:
-            if not 'log_tstamp' in entry or not entry['log_tstamp']:
-                entry['log_tstamp'] = tstamp
+        if isinstance(entries, str):
+            entries = [entries,]
+        for idx in range(len(entries)):
+            if isinstance(entries[idx], str):
+                entries[idx] = {'txt': entries[idx]}
+            if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
+                entries[idx]['log_tstamp'] = tstamp
         LOG.info(entries)
         self.srv_post('devices_log/post', {'entries': entries})
 
@@ -136,20 +129,27 @@ class LenferDevice:
     def post_tstamp(time_tuple=None):
         if not time_tuple:
             time_tuple = machine.RTC().datetime()
-        return "{0:d}/{1:d}/{2:d} {4:d}:{5:d}".format(*time_tuple)
+        return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
     def srv_post(self, url, data):
         rsp = None
+        result = None
         try:
             data['device_id'] = self.id['id']
             data['token'] = self.id['token']
             rsp = urequests.post(SERVER_URI + url, json=data)
+            if rsp.status_code != 200:
+                raise Exception(rsp.reason)
         except Exception as exc:
             LOG.exc(exc, 'Data posting error')
+            LOG.error("URL: %s", SERVER_URI + url)
+            LOG.error("data: %s", data)
         if rsp:
+            result = rsp.text
             rsp.close()
-            rsp = None
+            rsp = None            
         gc.collect()
+        return result
 
     def start_async(self):
         self.WDT = WDT(timeout=20000)        
@@ -165,4 +165,5 @@ class LenferDevice:
         for relay_module in ('relays', 'feeder'):
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
+        self.post_log('device start')
 

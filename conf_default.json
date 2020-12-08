@@ -56,8 +56,8 @@
         },
         "relays": {
             "enabled": false,
-            "buttons": [],
-            "relays": [],
+            "button": null,
+            "relay": null,
             "timers": []
         },
         "power_monitor": {
@@ -70,9 +70,9 @@
                 "shunt_ohms": 0.1
             },
             "reverse": 27,
-            "relays": {
-                "buttons": [],
-                "relays": [26],
+            "relay": {
+                "button": null,
+                "pin": 26,
                 "timers": []
             }
         }    
