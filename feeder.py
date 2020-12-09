@@ -1,4 +1,4 @@
-from machine import Pin, I2C, RTC
+from machine import Pin, I2C
 import uasyncio
 import utime
 
@@ -45,7 +45,15 @@ class FeederController(RelaysController):
     def on(self, value=True, source='timer'):
         if self.state != value:
             RelaysController.on(self, value, source)
-            self.device.post_log("Feeder: {0} Reverse: {1}".format(self.state, self.reverse))
+            self.device.post_log("Feeder: {0} Reverse: {1} {2}".format(self.state, self.reverse, source))
+            if value and source == 'manual':
+                uasyncio.get_event_loop().create_task(self.check_current())
+
+    async def check_current(self):
+        while self.state:
+            await uasyncio.sleep(1)
+            cur = self._power_monitor.current()
+            self.device.post_log("Feeder current: {0:+.2f}".format(cur))
 
     async def run_for(self, duration):
         start = utime.time()
