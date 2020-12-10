@@ -62,7 +62,7 @@ class RelaysController(LenferController):
     async def check_timers(self):
         while True:
             time_tuple = machine.RTC().datetime()
-            time = time_tuple[4]*3600 + time_tuple[5]*60 + time_tuple[6]
+            time = time_tuple[4]*3600 + time_tuple[5]*60
             for timer in self.timers:
                 timer.check(time)
             gc.collect()
