@@ -51,7 +51,12 @@ class LenferDevice:
                     LOG.error(module)
                     LOG.error(module_conf)
         with open('schedule.json', 'r') as file_schedule:
-            self.schedule = ujson.load(file_schedule)
+            try:
+                self.schedule = ujson.load(file_schedule)
+            except Exception as exc:
+                LOG.exc(exc, 'Schedule loading error')
+        if not self.schedule:
+            self.schedule = {'hash': None, 'start': None}
 
     @property
     def schedule(self):
