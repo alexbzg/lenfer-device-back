@@ -1,6 +1,6 @@
 {
     "wlan": {
-        "name": "ClimatControl",
+        "name": "Feeder",
         "ap_key": "",
         "address": "192.168.0.1",
         "mask": "255.255.255.0",
@@ -11,7 +11,7 @@
     },
     "modules": {
         "climate": {
-            "enabled": true,
+            "enabled": false,
             "sensor_devices": [
                 {
                     "type": "bme280",
@@ -56,23 +56,36 @@
         },
         "relays": {
             "enabled": false,
-            "buttons": [],
-            "relays": [],
+            "button": null,
+            "relay": null,
             "timers": []
         },
         "power_monitor": {
             "enabled": false
-        }
+        },
+        "feeder": {
+            "enabled": true,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            },
+            "reverse": 27,
+            "relay": {
+                "button": null,
+                "pin": 26,
+                "timers": []
+            }
+        }    
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 16,
-        "sda": 21
+        "scl": 25,
+        "sda": 33
     }],
-    "ow": [23, 22],
+    "ow": [],
     "leds": {
-        "status": 25
+        "status": 13
     },
-    "factory_reset": false,
-    "wlan_switch": 35
+    "factory_reset": 32,
+    "wlan_switch": 2
 }

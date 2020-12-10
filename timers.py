@@ -43,14 +43,12 @@ def timer_seconds(entry):
 class Timer:
 
     def __init__(self, conf, relay):
-        self.timer_type = conf['timer_type']
-        self.time_on = timer_minutes(conf['conf']['on'])
-        self.time_off = timer_minutes(conf['conf']['off']) if 'off' in conf['conf'] else None
+        self.time_on = timer_minutes(conf['on'])
+        self.time_off = timer_minutes(conf['off']) if 'off' in conf else None
+        self.duration = conf['duration'] if 'duration' in conf else None
+        self.period = conf['period'] if 'period' in conf else None
         self.relay = relay
         self.active = False
-        if self.timer_type == 'interval':
-            self.duration = conf['conf']['duration']
-            self.period = conf['conf']['period'] if 'period' in conf['conf'] else None
 
     def on(self, value=True):
         self.active = value
@@ -71,14 +69,14 @@ class Timer:
         self.on()
 
     def check(self, time):
-        if self.timer_type == 'standart':
-            if self.time_on <= time < self.time_off:
-                self.on()
-            elif self.time_off == time and self.active:
-                self.off()
-        elif self.timer_type == 'interval':
+        if self.duration:
             if self.time_on == time and not self.period:
                 self.on_off()
             elif self.period and self.time_on <= time < self.time_off and not self.active and\
                 ((time - self.time_on) % self.period) * 60 < self.duration:
                 self.on_off()
+        else:
+            if self.time_on <= time < self.time_off:
+                self.on()
+            elif self.time_off == time and self.active:
+                self.off()
