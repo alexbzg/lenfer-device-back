@@ -43,8 +43,8 @@ def timer_seconds(entry):
 class Timer:
 
     def __init__(self, conf, relay):
-        self.time_on = timer_minutes(conf['on'])
-        self.time_off = timer_minutes(conf['off']) if 'off' in conf else None
+        self.time_on = conf['on']
+        self.time_off = conf['off'] if 'off' in conf else None
         self.duration = conf['duration'] if 'duration' in conf else None
         self.period = conf['period'] if 'period' in conf else None
         self.relay = relay
