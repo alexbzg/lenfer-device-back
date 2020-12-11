@@ -97,8 +97,12 @@ class LenferDevice:
                 'schedule': {
                     'hash': self.schedule['hash'],
                     'start': self.schedule['start']
-                }
+                },
+                'props': {}
             }
+            for ctrl in self.modules.values():
+                if ctrl:
+                    data['props'].update(ctrl.updates_props)
             rsp = self.srv_post('device_updates', data)
             if rsp:
                 LOG.info(rsp)
