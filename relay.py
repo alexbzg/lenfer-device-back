@@ -26,6 +26,7 @@ class RelaysController(LenferController):
 
     def init_timers(self, conf):
         self.timers = []
+        self._conf['timers'] = conf
         for timer_conf in conf:
             self.timers.append(self.create_timer(timer_conf))
 
@@ -73,13 +74,11 @@ class RelaysController(LenferController):
             gc.collect()
             await uasyncio.sleep(60)
 
-    @property
-    def updates_props(self):
+    def get_updates_props(self):
         return {'timers': self._conf['timers']}
 
-    @updates_props.setter
-    def updates_props(self, data):
+    def set_updates_props(self, data):
         if 'timers' in data:
-            for _, idx in enumerate(self.timers):
-                self.delete_timer(idx)
+            while self.timers:                
+                self.delete_timer(0)
             self.init_timers(data['timers'])

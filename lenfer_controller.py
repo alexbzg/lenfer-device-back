@@ -3,10 +3,8 @@ class LenferController:
         self.schedule = None
         self.device = device
         
-    @property
-    def updates_props(self):
+    def get_updates_props(self):
         return {}
 
-    @updates_props.setter
-    def updates_props(self, data):
+    def set_updates_props(self, data):
         pass

@@ -20,32 +20,54 @@ class LenferDevice:
 
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
-    def __init__(self, conf):
+    def save_conf(self):
+        with open('conf.json', 'w', encoding="utf-8") as _conf_file:
+            _conf_file.write(ujson.dumps(self.conf))
+        self.status["ssid_delay"] = True
+
+    def load_def_conf(self):
+        with open('conf_default.json', 'r', encoding="utf-8") as conf_def_file:
+            self.conf = ujson.load(conf_def_file)
+            print('default config loaded')
+            self.save_conf()
+
+    def __init__(self):
         self._schedule = None
-        self.modules = {item: None for item in LenferDevice.MODULES_LIST}
-        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in conf['i2c']]
         self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False, "ssid_failure": False, "ssid_delay": False}
-        self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in conf['leds'].items()}
-        self._conf = conf
+        self.conf = {}
+        try:
+            with open('conf.json', 'r', encoding="utf-8") as conf_file:
+                self.conf = ujson.load(conf_file)
+                if self.conf:
+                    print('config loaded')
+        except Exception as exc:
+            LOG.exc(exc, 'Config load error')
+
+        if not self.conf:
+            self.load_def_conf()
+
+        self.modules = {item: None for item in LenferDevice.MODULES_LIST}
+        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in self.conf['i2c']]
+        self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self.conf['leds'].items()}
         with open('id.json', 'r') as file_id:
             self.id = ujson.load(file_id)
         for led in self.leds.values():
             led.off()
-        for module, module_conf in conf['modules'].items():
+        for module, module_conf in self.conf['modules'].items():
             if module_conf['enabled']:
                 try:
                     if module == 'climate':
                         from climate import ClimateController
-                        self.modules[module] = ClimateController(self, module_conf, conf['ow'])
+                        self.modules[module] = ClimateController(self, module_conf)
                     elif module == 'rtc':
-                        self.modules[module] = RtcController(module_conf, conf['i2c'])
+                        self.modules[module] = RtcController(module_conf, self.conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
                     elif module == 'relays':
                         from relay import RelaysController
                         self.modules[module] = RelaysController(self, module_conf)
                     elif module == 'feeder':
                         from feeder import FeederController
-                        self.modules[module] = FeederController(self, module_conf, conf['i2c'])
+                        self.modules[module] = FeederController(self, module_conf)
                 except Exception as exc:
                     LOG.exc(exc, 'Controller initialization error')
                     LOG.error(module)
@@ -102,13 +124,23 @@ class LenferDevice:
             }
             for ctrl in self.modules.values():
                 if ctrl:
-                    data['props'].update(ctrl.updates_props)
+                    data['props'].update(ctrl.get_updates_props())
             rsp = self.srv_post('device_updates', data)
             if rsp:
-                LOG.info(rsp)
-                updates = ujson.loads(rsp)
+                try:
+                    updates = ujson.loads(rsp)
+                except Exception as exc:
+                    LOG.exc(exc, 'Device updates parsing error')
+                    LOG.error("Server response")
+                    LOG.error(rsp)
                 if 'schedule' in updates:
                     self.schedule = updates['schedule']
+                if 'props' in updates:
+                    for ctrl in self.modules.values():
+                        if ctrl:
+                            ctrl.set_updates_props(updates['props'])
+                    self.save_conf()
+                
             await uasyncio.sleep(30)
 
     async def post_sensor_data(self):
@@ -168,11 +200,13 @@ class LenferDevice:
             loop.create_task(self.modules['climate'].read())
             if self.status['wlan'] == network.STA_IF:
                 loop.create_task(self.post_sensor_data())
-                loop.create_task(self.check_updates())
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
         for relay_module in ('relays', 'feeder'):
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
+        if self.status['wlan'] == network.STA_IF:
+            loop.create_task(self.check_updates())
+
         self.post_log('device start')
 

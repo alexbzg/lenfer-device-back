@@ -70,6 +70,7 @@
                 "shunt_ohms": 0.1
             },
             "reverse": 27,
+            "reverse_threshold": 1000,
             "relay": {
                 "button": null,
                 "pin": 26,

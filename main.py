@@ -20,31 +20,7 @@ LOG.setLevel(ulogging.INFO)
 
 DEVICE = None
 
-CONF = {}
-def save_conf():
-    with open('conf.json', 'w', encoding="utf-8") as _conf_file:
-        _conf_file.write(ujson.dumps(CONF))
-    if DEVICE:
-        DEVICE.status["ssid_delay"] = True
-
-def load_def_conf():
-    global CONF
-    with open('conf_default.json', 'r', encoding="utf-8") as conf_def_file:
-        CONF = ujson.load(conf_def_file)
-        print('default config loaded')
-        save_conf()
-try:
-    with open('conf.json', 'r', encoding="utf-8") as conf_file:
-        CONF = ujson.load(conf_file)
-        if CONF:
-            print('config loaded')
-except Exception as exc:
-    LOG.exc(exc, 'Config load error')
-
-if not CONF:
-    load_def_conf()
-
-DEVICE = LenferDevice(CONF)
+DEVICE = LenferDevice()
 LOOP = uasyncio.get_event_loop()
 
 nic = None
@@ -54,9 +30,9 @@ nic.active(True)
 #WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
 #print(WLANS_AVAILABLE)
 HOST = '0.0.0.0'
-if CONF['wlan']['enable_ssid'] and CONF['wlan']['ssid']:
+if DEVICE.conf['wlan']['enable_ssid'] and DEVICE.conf['wlan']['ssid']:
     try:
-        nic.connect(CONF['wlan']['ssid'], CONF['wlan']['key'])
+        nic.connect(DEVICE.conf['wlan']['ssid'], DEVICE.conf['wlan']['key'])
         sleep(5)
         HOST = nic.ifconfig()[0]
     except Exception as exc:
@@ -70,12 +46,12 @@ else:
         nic.active(False)
     AP = network.WLAN(network.AP_IF)
     AP.active(True)
-    authmode = 4 if CONF['wlan']['ap_key'] else 0
-    AP.config(essid=CONF['wlan']['name'], password=CONF['wlan']['ap_key'],\
+    authmode = 4 if DEVICE.conf['wlan']['ap_key'] else 0
+    AP.config(essid=DEVICE.conf['wlan']['name'], password=DEVICE.conf['wlan']['ap_key'],\
         authmode=authmode)
-    AP.ifconfig((CONF['wlan']['address'], CONF['wlan']['mask'],\
-        CONF['wlan']['address'], CONF['wlan']['address']))
-    HOST = CONF['wlan']['address']
+    AP.ifconfig((DEVICE.conf['wlan']['address'], DEVICE.conf['wlan']['mask'],\
+        DEVICE.conf['wlan']['address'], DEVICE.conf['wlan']['address']))
+    HOST = DEVICE.conf['wlan']['address']
     DEVICE.status["wlan"] = network.AP_IF
 
 def wlan_switch_irq(pin):
@@ -83,7 +59,7 @@ def wlan_switch_irq(pin):
         LOG.info('wlan switch was activated')
         DEVICE.status['wlan_switch'] = 'true'
 
-WLAN_SWITCH_BUTTON = Pin(CONF['wlan_switch'], Pin.IN, Pin.PULL_UP)
+WLAN_SWITCH_BUTTON = Pin(DEVICE.conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
 WLAN_SWITCH_BUTTON.irq(wlan_switch_irq)
 
 def factory_reset_irq(pin):
@@ -105,11 +81,11 @@ async def factory_reset():
             return
     for led in DEVICE.leds.values():
         led.on()
-    load_def_conf()
-    save_conf()
+    DEVICE.load_def_conf()
+    DEVICE.save_conf()
     machine.reset()
-if 'factory_reset' in CONF and CONF['factory_reset']:
-    FACTORY_RESET_BUTTON = Pin(CONF['factory_reset'], Pin.IN)
+if 'factory_reset' in DEVICE.conf and DEVICE.conf['factory_reset']:
+    FACTORY_RESET_BUTTON = Pin(DEVICE.conf['factory_reset'], Pin.IN)
     FACTORY_RESET_BUTTON.irq(factory_reset_irq)
 
 async def send_json(rsp, data):
@@ -124,7 +100,7 @@ def limits(req, rsp):
         if req.method == "POST":
             await req.read_json()
             ctrl.limits.update(req.json)
-            save_conf()
+            DEVICE.save_conf()
         await send_json(rsp, ctrl.limits)
 
 @APP.route(re.compile(r'/api/(\w+)/sensors/info'))
@@ -167,31 +143,31 @@ def timers(req, rsp):
                     ctrl.add_timer(timer_conf)
                 else:
                     ctrl.update_timer(int(key), timer_conf)
-            save_conf()
+            DEVICE.save_conf()
         elif req.method == 'DELETE':
             await req.read_json()
             ctrl.delete_timer(req.json)
-            save_conf()
+            DEVICE.save_conf()
         await send_json(rsp, ctrl._conf['timers'])
 
 @APP.route('/api/settings/wlan')
 def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
-        reset_flag = (CONF['wlan']['enable_ssid'] != req.json['enable_ssid']) or\
+        reset_flag = (DEVICE.conf['wlan']['enable_ssid'] != req.json['enable_ssid']) or\
             (req.json['enable_ssid'] and\
-                (CONF['wlan']['ssid'] != req.json['ssid'] or\
-                    CONF['wlan']['key'] != req.json['key'])) or\
+                (DEVICE.conf['wlan']['ssid'] != req.json['ssid'] or\
+                    DEVICE.conf['wlan']['key'] != req.json['key'])) or\
             ((not req.json['enable_ssid']) and\
-                (CONF['wlan']['name'] != req.json['name'] or\
-                    CONF['wlan']['ap_key'] != req.json['ap_key']))
-        CONF['wlan'].update(req.json)
-        save_conf()
+                (DEVICE.conf['wlan']['name'] != req.json['name'] or\
+                    DEVICE.conf['wlan']['ap_key'] != req.json['ap_key']))
+        DEVICE.conf['wlan'].update(req.json)
+        DEVICE.save_conf()
         if reset_flag:
             LOOP.create_task(delayed_reset(5))
         await send_json(rsp, {"reset": reset_flag})
     else:
-        await send_json(rsp, CONF['wlan'])
+        await send_json(rsp, DEVICE.conf['wlan'])
 
 async def delayed_reset(delay):
     await uasyncio.sleep(delay)
@@ -250,8 +226,8 @@ async def check_wlan_switch():
             enable_ssid(False)
 
 def enable_ssid(val):
-    CONF['wlan']['enable_ssid'] = val
-    save_conf()
+    DEVICE.conf['wlan']['enable_ssid'] = val
+    DEVICE.save_conf()
     machine.reset()
 
 async def delayed_ssid_switch():
@@ -265,7 +241,7 @@ async def delayed_ssid_switch():
 
 DEVICE.start_async()
 LOOP.create_task(check_wlan_switch())
-if DEVICE.status['wlan'] == network.AP_IF and CONF['wlan']['ssid']:
+if DEVICE.status['wlan'] == network.AP_IF and DEVICE.conf['wlan']['ssid']:
     LOOP.create_task(delayed_ssid_switch())
 gc.collect()
 APP.run(debug=True, host=HOST, port=80)

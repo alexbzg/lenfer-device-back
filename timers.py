@@ -6,9 +6,11 @@ import ulogging
 
 from ds3231_port import DS3231
 
+from lenfer_controller import LenferController
+
 LOG = ulogging.getLogger("Main")
 
-class RtcController:
+class RtcController(LenferController):
 
     def __init__(self, conf, i2c_conf):
         i2c_rtc = i2c_conf[conf["i2c"]]

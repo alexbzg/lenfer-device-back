@@ -27,11 +27,13 @@ class FeederTimer(Timer):
 
 class FeederController(RelaysController):
 
-    def __init__(self, device, conf, i2c):
+    def __init__(self, device, conf):
 
         RelaysController.__init__(self, device, conf['relay'])
-        self._power_monitor = PowerMonitor(conf['power_monitor'], i2c)
+        self._power_monitor = PowerMonitor(conf['power_monitor'], device.conf['i2c'])
         self._reverse = Pin(conf['reverse'], Pin.OUT)
+        self._reverse_threshold = conf['reverse_threshold']
+        self._reverse_duration = conf['reverse_duration']
         self._delay = 0
 
     @property
@@ -67,11 +69,11 @@ class FeederController(RelaysController):
             cur = self._power_monitor.current()
             self.device.post_log("Feeder current: {0:+.2f}".format(cur))
             expired = now - start
-            if cur > 1000:
+            if cur > self._reverse_threshold:
                 self.device.post_log("Feeder reverse")
                 self.engine_reverse(True)
-                await uasyncio.sleep(5)
-                expired -= 5
+                await uasyncio.sleep(self._reverse_duration)
+                expired -= self._reverse_duration
                 retries += 1
                 self.engine_reverse(False)
                 self.device.post_log("Feeder resume")
@@ -88,6 +90,21 @@ class FeederController(RelaysController):
     @property
     def reverse(self):
         return self._reverse.value()
+
+    def get_updates_props(self):
+        rslt = RelaysController.get_updates_props(self)
+        rslt['reverse_threshold'] = self._reverse_threshold
+        rslt['reverse_duration'] = self._reverse_duration
+        return rslt
+
+    def set_updates_props(self, data):
+        RelaysController.set_updates_props(self, data)
+        if 'reverse_threshold' in data:
+            self._reverse_threshold = data['reverse_threshold']
+            self.device.conf['modules']['feeder']['reverse_threshold'] = data['reverse_threshold']
+        if 'reverse_duration' in data:
+            self. _reverse_duration = data['reverse_duration']
+            self.device.conf['modules']['feeder']['reverse_duration'] = data['reverse_duration']
 
     @reverse.setter
     def reverse(self, value):
