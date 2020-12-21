@@ -35,6 +35,22 @@ class FeederController(RelaysController):
         self._reverse_threshold = conf['reverse_threshold']
         self._reverse_duration = conf['reverse_duration']
         self._delay = 0
+        if conf['buttons']:
+            for idx, pin in enumerate(conf['buttons']):
+                button = Pin(pin, Pin.IN, Pin.PULL_UP)
+                reverse = bool(idx)
+                button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
+
+    def on_button(self, pin, reverse=False):
+        print('button {0} {1} {2}'.format(
+            pin, pin.value(), 'reverse' if reverse else ''
+        ))
+        if pin.value():
+            self.on(False, 'manual')
+            self.reverse = reverse
+        else:
+            self.reverse = reverse
+            self.on(True, 'manual')
 
     @property
     def state(self):
@@ -47,7 +63,10 @@ class FeederController(RelaysController):
     def on(self, value=True, source='timer'):
         if self.state != value:
             RelaysController.on(self, value, source)
-            self.device.post_log("Feeder: {0} Reverse: {1} {2}".format(self.state, self.reverse, source))
+            self.device.post_log("Feeder {0} {1}{2}".format(
+                'start' if self.state else 'stop',
+                ' (reverse) ' if self.reverse else '',
+                source))
             if value and source == 'manual':
                 uasyncio.get_event_loop().create_task(self.check_current())
 

@@ -173,24 +173,29 @@ class LenferDevice:
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
     def srv_post(self, url, data):
-        rsp = None
         result = None
-        try:
-            data['device_id'] = self.id['id']
-            data['token'] = self.id['token']
-            rsp = urequests.post(SERVER_URI + url, json=data)
-            if rsp.status_code != 200:
-                raise Exception(rsp.reason)
-        except Exception as exc:
-            LOG.exc(exc, 'Data posting error')
-            LOG.error("URL: %s", SERVER_URI + url)
-            LOG.error("data: %s", data)
-        if rsp:
-            result = rsp.text
-            rsp.close()
-            rsp = None            
+        if self.online():
+            rsp = None
+            result = None
+            try:
+                data['device_id'] = self.id['id']
+                data['token'] = self.id['token']
+                rsp = urequests.post(SERVER_URI + url, json=data)
+                if rsp.status_code != 200:
+                    raise Exception(rsp.reason)
+            except Exception as exc:
+                LOG.exc(exc, 'Data posting error')
+                LOG.error("URL: %s", SERVER_URI + url)
+                LOG.error("data: %s", data)
+            if rsp:
+                result = rsp.text
+                rsp.close()
+                rsp = None            
         gc.collect()
         return result
+
+    def online(self):
+        return self.status['wlan'] == network.STA_IF and self.id['id']
 
     def start_async(self):
         self.WDT = WDT(timeout=20000)        
@@ -198,14 +203,14 @@ class LenferDevice:
         loop.create_task(self.bg_leds())
         if self.modules['climate']:
             loop.create_task(self.modules['climate'].read())
-            if self.status['wlan'] == network.STA_IF:
+            if self.online():
                 loop.create_task(self.post_sensor_data())
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
         for relay_module in ('relays', 'feeder'):
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
-        if self.status['wlan'] == network.STA_IF:
+        if self.online():
             loop.create_task(self.check_updates())
 
         self.post_log('device start')

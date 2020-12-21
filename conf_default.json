@@ -69,24 +69,26 @@
                 "i2c": 0,
                 "shunt_ohms": 0.1
             },
-            "reverse": 27,
+            "reverse": 25,
             "reverse_threshold": 1000,
+            "reverse_duration": 5,
+            "buttons": [2, 13],
             "relay": {
                 "button": null,
-                "pin": 26,
+                "pin": 33,
                 "timers": []
             }
         }    
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 25,
-        "sda": 33
+        "scl": 27,
+        "sda": 26
     }],
     "ow": [],
     "leds": {
-        "status": 13
+        "status": 23
     },
     "factory_reset": 32,
-    "wlan_switch": 2
+    "wlan_switch": 22
 }
