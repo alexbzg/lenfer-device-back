@@ -34,6 +34,7 @@ class FeederController(RelaysController):
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self._reverse_threshold = conf['reverse_threshold']
         self._reverse_duration = conf['reverse_duration']
+        self._reverse_delay = 2
         self._delay = 0
         if conf['buttons']:
             for idx, pin in enumerate(conf['buttons']):
@@ -90,17 +91,19 @@ class FeederController(RelaysController):
             expired = now - start
             if cur > self._reverse_threshold:
                 self.device.post_log("Feeder reverse")
-                self.engine_reverse(True)
+                await self.engine_reverse(True)
                 await uasyncio.sleep(self._reverse_duration)
-                expired -= self._reverse_duration
+                expired -= self._reverse_duration + 2 * self._reverse_delay
                 retries += 1
                 self.engine_reverse(False)
                 self.device.post_log("Feeder resume")
         self.off()
 
-    def engine_reverse(self, reverse):
+    async def engine_reverse(self, reverse):
         self.pin.value(False)
+        await uasyncio.sleep(self._reverse_delay)
         self.reverse = reverse
+        await uasyncio.sleep(self._reverse_delay)
         self.pin.value(True)
 
     def create_timer(self, conf):
