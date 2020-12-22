@@ -12,6 +12,7 @@ class RelaysController(LenferController):
     def __init__(self, device, conf):
         LenferController.__init__(self, device)
         self.pin = Pin(conf['pin'], Pin.OUT)
+        self.pin.off()
         self._conf = conf
         self._active = {'timer': False, 'manual': False}
 

@@ -32,6 +32,7 @@ class FeederController(RelaysController):
         RelaysController.__init__(self, device, conf['relay'])
         self._power_monitor = PowerMonitor(conf['power_monitor'], device.conf['i2c'])
         self._reverse = Pin(conf['reverse'], Pin.OUT)
+        self.reverse = False
         self._reverse_threshold = conf['reverse_threshold']
         self._reverse_duration = conf['reverse_duration']
         self._reverse_delay = 2
@@ -70,6 +71,8 @@ class FeederController(RelaysController):
                 source))
             if value and source == 'manual':
                 uasyncio.get_event_loop().create_task(self.check_current())
+            if not value:
+                self.reverse = False
 
     async def check_current(self):
         while self.state:
@@ -80,23 +83,23 @@ class FeederController(RelaysController):
     async def run_for(self, duration):
         start = utime.time()
         now = start
+        prev_time = start
         expired = 0
         retries = 0
         self.on()
-        while now - start < duration and retries < 3:
+        while expired < duration and retries < 3:
             await uasyncio.sleep(1)
             now = utime.time()
             cur = self._power_monitor.current()
             self.device.post_log("Feeder current: {0:+.2f}".format(cur))
-            expired = now - start
+            expired += now - prev_time
+            prev_time = now
             if cur > self._reverse_threshold:
-                self.device.post_log("Feeder reverse")
                 await self.engine_reverse(True)
                 await uasyncio.sleep(self._reverse_duration)
                 expired -= self._reverse_duration + 2 * self._reverse_delay
                 retries += 1
-                self.engine_reverse(False)
-                self.device.post_log("Feeder resume")
+                await self.engine_reverse(False)
         self.off()
 
     async def engine_reverse(self, reverse):
@@ -130,4 +133,6 @@ class FeederController(RelaysController):
 
     @reverse.setter
     def reverse(self, value):
-        self._reverse.value(value)
+        if value != self.reverse:
+            self.device.post_log("Feeder reverse {0}".format('on' if value else 'off'))
+            self._reverse.value(value)
