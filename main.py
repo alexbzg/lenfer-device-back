@@ -12,6 +12,7 @@ import ulogging
 import picoweb
 
 from lenfer_device import LenferDevice
+from update import load_version, perform_update
 
 APP = picoweb.WebApp(__name__)
 
@@ -33,13 +34,17 @@ HOST = '0.0.0.0'
 if DEVICE.conf['wlan']['enable_ssid'] and DEVICE.conf['wlan']['ssid']:
     try:
         nic.connect(DEVICE.conf['wlan']['ssid'], DEVICE.conf['wlan']['key'])
-        sleep(7)
+        sleep(10)
         HOST = nic.ifconfig()[0]
     except Exception as exc:
         LOG.exc(exc, 'WLAN connect error')
 
 if nic and nic.isconnected():
     DEVICE.status["wlan"] = network.STA_IF
+    version_data = load_version()
+    if not version_data['hash'] or version_data['update']:
+        perform_update()
+
 else:
     if nic:
         nic.active(False)

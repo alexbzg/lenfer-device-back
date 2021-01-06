@@ -10,7 +10,8 @@ import ulogging
 
 import urequests
 
-from timers import RtcController, Timer
+from timers import RtcController
+from update import check_update
 
 LOG = ulogging.getLogger("Main")
 
@@ -140,7 +141,7 @@ class LenferDevice:
                         if ctrl:
                             ctrl.set_updates_props(updates['props'])
                     self.save_conf()
-                
+
             await uasyncio.sleep(30)
 
     async def post_sensor_data(self):

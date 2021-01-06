@@ -49,7 +49,6 @@ class FeederController(RelaysController):
         ))
         if pin.value():
             self.on(False, 'manual')
-            self.reverse = reverse
         else:
             self.reverse = reverse
             self.on(True, 'manual')

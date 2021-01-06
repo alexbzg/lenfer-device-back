@@ -72,7 +72,7 @@
             "reverse": 25,
             "reverse_threshold": 1000,
             "reverse_duration": 5,
-            "buttons": [2, 13],
+            "buttons": [16, 13],
             "relay": {
                 "button": null,
                 "pin": 33,
