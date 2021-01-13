@@ -1,0 +1,10 @@
+{
+    "name": "Lenfer",
+    "ap_key": "",
+    "address": "192.168.0.1",
+    "mask": "255.255.255.0",
+    "authmode": 4,
+    "ssid": "",
+    "key": "",
+    "enable_ssid": true
+}

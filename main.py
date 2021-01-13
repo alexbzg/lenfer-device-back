@@ -1,5 +1,4 @@
 import gc
-from time import sleep
 import re
 
 import uasyncio
@@ -11,86 +10,23 @@ import ulogging
 
 import picoweb
 
+from wlan import WlanController
 from lenfer_device import LenferDevice
-from update import load_version, perform_update
+from software_update import load_version, perform_update
+from utils import load_json, save_json
 
 APP = picoweb.WebApp(__name__)
 
 LOG = ulogging.getLogger("Main")
-LOG.setLevel(ulogging.INFO)
+LOG.setLevel(ulogging.DEBUG)
 
-DEVICE = None
+WLAN = WlanController()
 
-DEVICE = LenferDevice()
-LOOP = uasyncio.get_event_loop()
+if WLAN.online():
+    #check for software updates
+    pass
 
-nic = None
-WLANS_AVAILABLE = None
-nic = network.WLAN(network.STA_IF)
-nic.active(True)
-#WLANS_AVAILABLE = [wlan[0].decode('utf-8') for wlan in nic.scan()]
-#print(WLANS_AVAILABLE)
-HOST = '0.0.0.0'
-if DEVICE.conf['wlan']['enable_ssid'] and DEVICE.conf['wlan']['ssid']:
-    try:
-        nic.connect(DEVICE.conf['wlan']['ssid'], DEVICE.conf['wlan']['key'])
-        sleep(10)
-        HOST = nic.ifconfig()[0]
-    except Exception as exc:
-        LOG.exc(exc, 'WLAN connect error')
-
-if nic and nic.isconnected():
-    DEVICE.status["wlan"] = network.STA_IF
-    version_data = load_version()
-    if not version_data['hash'] or version_data['update']:
-        perform_update()
-
-else:
-    if nic:
-        nic.active(False)
-    AP = network.WLAN(network.AP_IF)
-    AP.active(True)
-    authmode = 4 if DEVICE.conf['wlan']['ap_key'] else 0
-    AP.config(essid=DEVICE.conf['wlan']['name'], password=DEVICE.conf['wlan']['ap_key'],\
-        authmode=authmode)
-    AP.ifconfig((DEVICE.conf['wlan']['address'], DEVICE.conf['wlan']['mask'],\
-        DEVICE.conf['wlan']['address'], DEVICE.conf['wlan']['address']))
-    HOST = DEVICE.conf['wlan']['address']
-    DEVICE.status["wlan"] = network.AP_IF
-
-def wlan_switch_irq(pin):
-    if pin.value():
-        LOG.info('wlan switch was activated')
-        DEVICE.status['wlan_switch'] = 'true'
-
-WLAN_SWITCH_BUTTON = Pin(DEVICE.conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
-WLAN_SWITCH_BUTTON.irq(wlan_switch_irq)
-
-def factory_reset_irq(pin):
-    if pin.value():
-        if DEVICE.status['factory_reset'] == 'pending':
-            DEVICE.status['factory_reset'] = 'cancel'
-    else:
-        if not DEVICE.status['factory_reset']:
-            DEVICE.status['factory_reset'] = 'pending'
-            uasyncio.get_event_loop().create_task(factory_reset())
-
-async def factory_reset():
-    LOG.info('factory reset is pending')
-    for co in range(50):
-        await uasyncio.sleep_ms(100)
-        if DEVICE.status['factory_reset'] != 'pending':
-            LOG.info('factory reset is cancelled')
-            DEVICE.status['factory_reset'] = None
-            return
-    for led in DEVICE.leds.values():
-        led.on()
-    DEVICE.load_def_conf()
-    DEVICE.save_conf()
-    machine.reset()
-if 'factory_reset' in DEVICE.conf and DEVICE.conf['factory_reset']:
-    FACTORY_RESET_BUTTON = Pin(DEVICE.conf['factory_reset'], Pin.IN)
-    FACTORY_RESET_BUTTON.irq(factory_reset_irq)
+DEVICE = LenferDevice(WLAN)
 
 async def send_json(rsp, data):
     await picoweb.start_response(rsp, 'application/json', "200", {'cache-control': 'no-store'})
@@ -158,28 +94,26 @@ def timers(req, rsp):
 def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
-        reset_flag = (DEVICE.conf['wlan']['enable_ssid'] != req.json['enable_ssid']) or\
-            (req.json['enable_ssid'] and\
-                (DEVICE.conf['wlan']['ssid'] != req.json['ssid'] or\
-                    DEVICE.conf['wlan']['key'] != req.json['key'])) or\
-            ((not req.json['enable_ssid']) and\
-                (DEVICE.conf['wlan']['name'] != req.json['name'] or\
-                    DEVICE.conf['wlan']['ap_key'] != req.json['ap_key']))
-        DEVICE.conf['wlan'].update(req.json)
-        DEVICE.save_conf()
+        reset_flag = ((WLAN.conf['enable_ssid'] != req.json['enable_ssid']) or
+            (req.json['enable_ssid'] and
+                (WLAN.conf['ssid'] != req.json['ssid'] or
+                    WLAN.conf['key'] != req.json['key'])) or
+            ((not req.json['enable_ssid']) and
+                (WLAN.conf['name'] != req.json['name'] or
+                    WLAN.conf['ap_key'] != req.json['ap_key'])))
+        WLAN.conf.update(req.json)
+        WLAN.save_conf()
+        if DEVICE:
+            DEVICE.status["ssid_delay"] = True
         if reset_flag:
-            LOOP.create_task(delayed_reset(5))
+            uasyncio.get_event_loop().create_task(delayed_reset(5))
         await send_json(rsp, {"reset": reset_flag})
     else:
-        await send_json(rsp, DEVICE.conf['wlan'])
+        await send_json(rsp, WLAN.conf)
 
 async def delayed_reset(delay):
     await uasyncio.sleep(delay)
     machine.reset()
-
-@APP.route('/api/settings/wlan/scan')
-def get_wlan_scan(req, rsp):
-    await send_json(rsp, WLANS_AVAILABLE)
 
 @APP.route('/api/climate/data')
 def get_data(req, rsp):
@@ -223,29 +157,8 @@ def relay_api(req, rsp):
 def get_modules(req, rsp):
     await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
 
-async def check_wlan_switch():
-    while True:
-        await uasyncio.sleep(5)
-        if DEVICE.status['wlan_switch'] and DEVICE.status['wlan'] == network.STA_IF:
-            enable_ssid(False)
 
-def enable_ssid(val):
-    DEVICE.conf['wlan']['enable_ssid'] = val
-    DEVICE.save_conf()
-    machine.reset()
-
-async def delayed_ssid_switch():
-    LOG.info("delayed wlan switch activated")
-    while True:
-        await uasyncio.sleep(300)
-        if DEVICE.status["ssid_delay"]:
-            DEVICE.status["ssid_delay"] = False
-        else:
-            enable_ssid(True)
 
 DEVICE.start_async()
-LOOP.create_task(check_wlan_switch())
-if DEVICE.status['wlan'] == network.AP_IF and DEVICE.conf['wlan']['ssid'] and DEVICE.conf['wlan']['enable_ssid']:
-    LOOP.create_task(delayed_ssid_switch())
 gc.collect()
-APP.run(debug=True, host=HOST, port=80)
+APP.run(debug=True, host=WLAN.host, port=80)

@@ -1,5 +1,5 @@
 import gc
-from time import sleep
+#from time import sleep
 
 import uasyncio
 import network
@@ -11,7 +11,8 @@ import ulogging
 import urequests
 
 from timers import RtcController
-from update import check_update
+from utils import load_json, save_json, load_conf, save_conf
+#from update import check_update
 
 LOG = ulogging.getLogger("Main")
 
@@ -22,36 +23,34 @@ class LenferDevice:
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
     def save_conf(self):
-        with open('conf.json', 'w', encoding="utf-8") as _conf_file:
-            _conf_file.write(ujson.dumps(self.conf))
+        save_conf(self.conf)
         self.status["ssid_delay"] = True
 
     def load_def_conf(self):
-        with open('conf_default.json', 'r', encoding="utf-8") as conf_def_file:
-            self.conf = ujson.load(conf_def_file)
-            print('default config loaded')
-            self.save_conf()
+        self.conf = load_conf(use_default=True)
+        print('default config loaded')
+        self.save_conf()
 
-    def __init__(self):
+    def __init__(self, wlan):
         self._schedule = None
+        self._wlan = wlan
         self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False, "ssid_failure": False, "ssid_delay": False}
-        self.conf = {}
-        try:
-            with open('conf.json', 'r', encoding="utf-8") as conf_file:
-                self.conf = ujson.load(conf_file)
-                if self.conf:
-                    print('config loaded')
-        except Exception as exc:
-            LOG.exc(exc, 'Config load error')
+        self.conf = load_conf()
 
         if not self.conf:
             self.load_def_conf()
 
+        wlan_switch_button = Pin(self.conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
+        wlan_switch_button.irq(self.wlan_switch_irq)
+
+        if 'factory_reset' in self.conf and self.conf['factory_reset']:
+            factory_reset_button = Pin(self.conf['factory_reset'], Pin.IN)
+            factory_reset_button.irq(self.factory_reset_irq)
+
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in self.conf['i2c']]
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self.conf['leds'].items()}
-        with open('id.json', 'r') as file_id:
-            self.id = ujson.load(file_id)
+        self.id = load_json('id.json')
         for led in self.leds.values():
             led.off()
         for module, module_conf in self.conf['modules'].items():
@@ -80,6 +79,54 @@ class LenferDevice:
                 LOG.exc(exc, 'Schedule loading error')
         if not self.schedule:
             self.schedule = {'hash': None, 'start': None}
+
+    def wlan_switch_irq(self, pin):
+        if pin.value():
+            LOG.info('wlan switch was activated')
+            self.status['wlan_switch'] = 'true'
+
+    async def check_wlan_switch(self):
+        while True:
+            await uasyncio.sleep(5)
+            if self.status['wlan_switch'] and self._wlan.mode() != network.AP_IF:
+                self.enable_ssid(False)
+
+    def enable_ssid(self, val):
+        self._wlan.conf['enable_ssid'] = val
+        self._wlan.save_conf()
+        machine.reset()
+
+    async def delayed_ssid_switch(self):
+        LOG.info("delayed wlan switch activated")
+        while True:
+            await uasyncio.sleep(300)
+            if self.status["ssid_delay"]:
+                self.status["ssid_delay"] = False
+            else:
+                self.enable_ssid(True)
+
+    def factory_reset_irq(self, pin):
+        if pin.value():
+            if self.status['factory_reset'] == 'pending':
+                self.status['factory_reset'] = 'cancel'
+        else:
+            if not self.status['factory_reset']:
+                self.status['factory_reset'] = 'pending'
+                uasyncio.get_event_loop().create_task(self.factory_reset())
+
+    async def factory_reset(self):
+        LOG.info('factory reset is pending')
+        for co in range(50):
+            await uasyncio.sleep_ms(100)
+            if self.status['factory_reset'] != 'pending':
+                LOG.info('factory reset is cancelled')
+                self.status['factory_reset'] = None
+                return
+        for led in DEVICE.leds.values():
+            led.on()
+        self.load_def_conf()
+        machine.reset()
+
 
     @property
     def schedule(self):
@@ -196,12 +243,15 @@ class LenferDevice:
         return result
 
     def online(self):
-        return self.status['wlan'] == network.STA_IF and self.id['id']
+        return 'id' in self.id and self.id['id'] and self._wlan.online()
 
     def start_async(self):
         self.WDT = WDT(timeout=20000)        
-        loop = uasyncio.get_event_loop()        
+        loop = uasyncio.get_event_loop()     
         loop.create_task(self.bg_leds())
+        loop.create_task(self.check_wlan_switch())
+        if self._wlan.mode == network.AP_IF and self._wlan.conf['ssid'] and self._wlan.conf['enable_ssid']:
+            loop.create_task(self.delayed_ssid_switch())
         if self.modules['climate']:
             loop.create_task(self.modules['climate'].read())
             if self.online():
