@@ -1,4 +1,5 @@
 import gc
+import micropython
 #from time import sleep
 
 import uasyncio
@@ -122,11 +123,10 @@ class LenferDevice:
                 LOG.info('factory reset is cancelled')
                 self.status['factory_reset'] = None
                 return
-        for led in DEVICE.leds.values():
+        for led in self.leds.values():
             led.on()
         self.load_def_conf()
         machine.reset()
-
 
     @property
     def schedule(self):
@@ -173,14 +173,8 @@ class LenferDevice:
             for ctrl in self.modules.values():
                 if ctrl:
                     data['props'].update(ctrl.get_updates_props())
-            rsp = self.srv_post('device_updates', data)
-            if rsp:
-                try:
-                    updates = ujson.loads(rsp)
-                except Exception as exc:
-                    LOG.exc(exc, 'Device updates parsing error')
-                    LOG.error("Server response")
-                    LOG.error(rsp)
+            updates = self.srv_post('device_updates', data)
+            if updates:
                 if 'schedule' in updates:
                     self.schedule = updates['schedule']
                 if 'props' in updates:
@@ -220,26 +214,37 @@ class LenferDevice:
             time_tuple = machine.RTC().datetime()
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
-    def srv_post(self, url, data):
+    def srv_post(self, url, data, raw=False):
+        rsp = None
         result = None
-        if self.online():
-            rsp = None
-            result = None
+        try:
+            data['device_id'] = self.id['id']
+            data['token'] = self.id['token']
+            gc.collect()
+            gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())            
+            micropython.mem_info()
+            print('-----------------------------')
+            print('Free: {} allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
+            rsp = urequests.post(SERVER_URI + url, json=data, parse_headers=False)
+            if rsp.status_code != 200:
+                raise Exception(rsp.reason)
+        except Exception as exc:
+            LOG.exc(exc, 'Data posting error')
+            LOG.error("URL: %s", SERVER_URI + url)
+            LOG.error("data: %s", data)
+        if rsp:
+            if raw:
+                return rsp.raw
             try:
-                data['device_id'] = self.id['id']
-                data['token'] = self.id['token']
-                rsp = urequests.post(SERVER_URI + url, json=data)
-                if rsp.status_code != 200:
-                    raise Exception(rsp.reason)
+                result = ujson.load(rsp.raw)
             except Exception as exc:
-                LOG.exc(exc, 'Data posting error')
-                LOG.error("URL: %s", SERVER_URI + url)
-                LOG.error("data: %s", data)
-            if rsp:
-                result = rsp.text
+                LOG.exc(exc, 'Server response reading error')
+                print(rsp.raw.read())
+            finally:
                 rsp.close()
                 rsp = None            
         gc.collect()
+        gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())            
         return result
 
     def online(self):

@@ -129,25 +129,24 @@ class ClimateController(LenferController):
                 if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
                     day_no = 0
                     start = utime.mktime(self.schedule['start'])
-                    today = utime.time()
+                    today = utime.mktime(machine.RTC().datetime())
                     if start < today:
                         day_no = int((today-start)/86400)
                     if day_no >= len(self.schedule['items']):
                         day_no = len(self.schedule['items']) - 1
                     day = self.schedule['items'][day_no]
-                    print('schedule day: ' + str(day_no))
-                    temp_delta = float(day['params']['temperature']['delta']) if 'delta' in day['params']['temperature'] else 0.1
+                    temp_idx = self.schedule['params'].index('temperature')
+                    temp_delta = float(day[temp_idx][1])
                     temp_limits = [
-                        float(day['params']['temperature']['value']) - temp_delta,
-                        float(day['params']['temperature']['value']) + temp_delta,
+                        float(day[temp_idx][0]) - temp_delta,
+                        float(day[temp_idx][0]) + temp_delta,
                     ]
-                    print('temp limits: ')
-                    print(temp_limits)
 
-                    humid_delta = float(day['params']['humidity']['delta']) if 'delta' in day['params']['humidity'] else 1
+                    humid_idx = self.schedule['params'].index('humidity')
+                    humid_delta = float(day[humid_idx][1])
                     humid_limits = [
-                        float(day['params']['humidity']['value']) - humid_delta,
-                        float(day['params']['humidity']['value']) + humid_delta,
+                        float(day[humid_idx][0]) - humid_delta,
+                        float(day[humid_idx][0]) + humid_delta,
                     ]
 
                 else:
