@@ -12,8 +12,8 @@ import ulogging
 import urequests
 
 from timers import RtcController
-from utils import load_json, save_json, load_conf, save_conf
-#from update import check_update
+from utils import load_json, load_conf, save_conf, manage_memory
+from software_update import check_software_update, schedule_software_update
 
 LOG = ulogging.getLogger("Main")
 
@@ -35,7 +35,13 @@ class LenferDevice:
     def __init__(self, wlan):
         self._schedule = None
         self._wlan = wlan
-        self.status = {"wlan": None, "factory_reset": False, "wlan_switch": False, "ssid_failure": False, "ssid_delay": False}
+        self.status = {
+            "wlan": None,
+            "factory_reset": False,
+            "wlan_switch": False,
+            "ssid_failure": False,
+            "ssid_delay": False
+            }
         self.conf = load_conf()
 
         if not self.conf:
@@ -49,7 +55,8 @@ class LenferDevice:
             factory_reset_button.irq(self.factory_reset_irq)
 
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
-        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda'])) for i2c_conf in self.conf['i2c']]
+        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
+            for i2c_conf in self.conf['i2c']]
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self.conf['leds'].items()}
         self.id = load_json('id.json')
         for led in self.leds.values():
@@ -161,6 +168,12 @@ class LenferDevice:
             await uasyncio.sleep(5)
             gc.collect()
 
+    async def task_check_software_updates(self):
+        while True:
+            if check_software_update():
+                schedule_software_update()
+            await uasyncio.sleep(3600)
+
     async def check_updates(self):
         while True:
             data = {
@@ -197,16 +210,17 @@ class LenferDevice:
             self.srv_post('sensors_data', data)
 
     def post_log(self, entries):
-        tstamp = self.post_tstamp()
-        if isinstance(entries, str):
-            entries = [entries,]
-        for idx in range(len(entries)):
-            if isinstance(entries[idx], str):
-                entries[idx] = {'txt': entries[idx]}
-            if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
-                entries[idx]['log_tstamp'] = tstamp
         LOG.info(entries)
-        self.srv_post('devices_log/post', {'entries': entries})
+        if self.online():
+            tstamp = self.post_tstamp()
+            if isinstance(entries, str):
+                entries = [entries,]
+            for idx in range(len(entries)):
+                if isinstance(entries[idx], str):
+                    entries[idx] = {'txt': entries[idx]}
+                if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
+                    entries[idx]['log_tstamp'] = tstamp
+            self.srv_post('devices_log/post', {'entries': entries})
 
     @staticmethod
     def post_tstamp(time_tuple=None):
@@ -220,11 +234,7 @@ class LenferDevice:
         try:
             data['device_id'] = self.id['id']
             data['token'] = self.id['token']
-            gc.collect()
-            gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())            
-            micropython.mem_info()
-            print('-----------------------------')
-            print('Free: {} allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
+            manage_memory()
             rsp = urequests.post(SERVER_URI + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
@@ -242,9 +252,8 @@ class LenferDevice:
                 print(rsp.raw.read())
             finally:
                 rsp.close()
-                rsp = None            
-        gc.collect()
-        gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())            
+                rsp = None
+        manage_memory()
         return result
 
     def online(self):
@@ -268,6 +277,7 @@ class LenferDevice:
                 loop.create_task(self.modules[relay_module].check_timers())
         if self.online():
             loop.create_task(self.check_updates())
+            loop.create_task(self.task_check_software_updates())
 
         self.post_log('device start')
 

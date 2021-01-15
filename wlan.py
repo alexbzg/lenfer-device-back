@@ -6,11 +6,10 @@ import ulogging
 
 from utils import load_json, save_json
 
-LOG = ulogging.getLogger("Main")
-
 class WlanController:
 
     def __init__(self):
+        LOG = ulogging.getLogger("Main")
         self.conf = load_json('wlan.json')
         if not self.conf:
             LOG.warning('Default WLAN conf was loaded')
@@ -42,7 +41,6 @@ class WlanController:
             self.mode = network.AP_IF
 
     def save_conf(self):
-        LOG.info(self.conf)
         save_json(self.conf, 'wlan.json')
 
     def online(self):

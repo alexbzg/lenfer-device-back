@@ -12,8 +12,8 @@ import picoweb
 
 from wlan import WlanController
 from lenfer_device import LenferDevice
-from software_update import load_version, perform_update
-from utils import load_json, save_json
+from software_update import load_version, perform_software_update
+from utils import load_json, save_json, manage_memory
 
 APP = picoweb.WebApp(__name__)
 
@@ -23,8 +23,12 @@ LOG.setLevel(ulogging.DEBUG)
 WLAN = WlanController()
 
 if WLAN.online():
-    #check for software updates
-    pass
+    software_version = load_version()
+    if software_version['update']:
+        perform_software_update()
+        machine.reset()
+    
+manage_memory()
 
 DEVICE = LenferDevice(WLAN)
 
@@ -34,7 +38,7 @@ async def send_json(rsp, data):
     gc.collect()
 
 @APP.route('/api/climate/limits')
-def limits(req, rsp):
+async def limits(req, rsp):
     ctrl = DEVICE.modules['climate']
     if ctrl:
         if req.method == "POST":
@@ -44,7 +48,7 @@ def limits(req, rsp):
         await send_json(rsp, ctrl.limits)
 
 @APP.route(re.compile(r'/api/(\w+)/sensors/info'))
-def get_sensors_info(req, rsp):
+async def get_sensors_info(req, rsp):
     ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
     ctrl = DEVICE.modules[ctrl_type]
     if ctrl and hasattr(ctrl, 'sensors_roles'):
@@ -64,7 +68,7 @@ def get_ctrl(req):
     return DEVICE.modules[ctrl_type]
 
 @APP.route(re.compile(r'/api/(\w+)/sensors/data'))
-def get_sensors_data(req, rsp):
+async def get_sensors_data(req, rsp):
     ctrl = get_ctrl(req)
     if ctrl and hasattr(ctrl, 'data'):
         await send_json(rsp, {str(_id): value  for _id, value in ctrl.data.items()})
@@ -72,7 +76,7 @@ def get_sensors_data(req, rsp):
         gc.collect()
 
 @APP.route(re.compile(r'/api/(\w+)/timers'))
-def timers(req, rsp):
+async def timers(req, rsp):
     ctrl = get_ctrl(req)
     if ctrl:
         if req.method == 'POST':
@@ -91,7 +95,7 @@ def timers(req, rsp):
         await send_json(rsp, ctrl._conf['timers'])
 
 @APP.route('/api/settings/wlan')
-def get_wlan_settings(req, rsp):
+async def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
         reset_flag = ((WLAN.conf['enable_ssid'] != req.json['enable_ssid']) or
@@ -116,13 +120,13 @@ async def delayed_reset(delay):
     machine.reset()
 
 @APP.route('/api/climate/data')
-def get_data(req, rsp):
+async def get_data(req, rsp):
     ctrl = DEVICE.modules['climate']
     if ctrl:
         await send_json(rsp, ctrl.data)
 
 @APP.route('/api/time')
-def get_time(req, rsp):
+async def get_time(req, rsp):
     if req.method == 'POST':
         ctrl = DEVICE.modules['rtc']
         if ctrl:
@@ -133,12 +137,12 @@ def get_time(req, rsp):
     await send_json(rsp, machine.RTC().datetime())
 
 @APP.route('/')
-def get_index(req, rsp):
+async def get_index(req, rsp):
     await APP.sendfile(rsp, 'html/index.html', content_type="text/html; charset=utf-8")
     gc.collect()
 
 @APP.route(re.compile(r'/api/(\w+)/relay'))
-def relay_api(req, rsp):
+async def relay_api(req, rsp):
     ctrl = get_ctrl(req)
     if ctrl:
         if req.method == 'POST':
@@ -154,10 +158,8 @@ def relay_api(req, rsp):
         gc.collect()
 
 @APP.route('/api/modules')
-def get_modules(req, rsp):
+async def get_modules(req, rsp):
     await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
-
-
 
 DEVICE.start_async()
 gc.collect()
