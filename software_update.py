@@ -1,5 +1,6 @@
 import ujson
 import machine
+import uos
 
 import ulogging
 import urequests
@@ -96,7 +97,7 @@ def ensure_file_path(path):
         for i, fragment in enumerate(split_path):
             parent = '/'.join(split_path[:-i])
             try:
-                os.mkdir(parent)
+                uos.mkdir(parent)
             except OSError:
                 pass
 

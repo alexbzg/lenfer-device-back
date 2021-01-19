@@ -170,8 +170,10 @@ class LenferDevice:
 
     async def task_check_software_updates(self):
         while True:
+            self.WDT.feed()
             if check_software_update():
                 schedule_software_update()
+            self.WDT.feed()
             await uasyncio.sleep(3600)
 
     async def check_updates(self):
@@ -235,6 +237,7 @@ class LenferDevice:
             data['device_id'] = self.id['id']
             data['token'] = self.id['token']
             manage_memory()
+            self.WDT.feed()
             rsp = urequests.post(SERVER_URI + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
@@ -242,6 +245,8 @@ class LenferDevice:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", SERVER_URI + url)
             LOG.error("data: %s", data)
+        finally:
+            self.WDT.feed()
         if rsp:
             if raw:
                 return rsp.raw
@@ -251,7 +256,7 @@ class LenferDevice:
                 LOG.exc(exc, 'Server response reading error')
                 print(rsp.raw.read())
             finally:
-                rsp.close()
+                rsp.close() 
                 rsp = None
         manage_memory()
         return result
