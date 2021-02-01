@@ -33,8 +33,8 @@ class FeederController(RelaysController):
         self._power_monitor = PowerMonitor(conf['power_monitor'], device.conf['i2c'])
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
-        self._reverse_threshold = conf['reverse_threshold']
-        self._reverse_duration = conf['reverse_duration']
+        self._reverse_threshold = device.settings['reverse_threshold']
+        self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
         self._delay = 0
         if conf['buttons']:
@@ -115,20 +115,12 @@ class FeederController(RelaysController):
     def reverse(self):
         return self._reverse.value()
 
-    def get_updates_props(self):
-        rslt = RelaysController.get_updates_props(self)
-        rslt['reverse_threshold'] = self._reverse_threshold
-        rslt['reverse_duration'] = self._reverse_duration
-        return rslt
-
-    def set_updates_props(self, data):
-        RelaysController.set_updates_props(self, data)
-        if 'reverse_threshold' in data:
-            self._reverse_threshold = data['reverse_threshold']
-            self.device.conf['modules']['feeder']['reverse_threshold'] = data['reverse_threshold']
-        if 'reverse_duration' in data:
-            self. _reverse_duration = data['reverse_duration']
-            self.device.conf['modules']['feeder']['reverse_duration'] = data['reverse_duration']
+    def update_settings(self):
+        RelaysController.update_settings(self)
+        if 'reverse_threshold' in self.device.settings:
+            self._reverse_threshold = self.device.settings['reverse_threshold']
+        if 'reverse_duration' in self.device.settings:
+            self. _reverse_duration = self.device.settings['reverse_duration']
 
     @reverse.setter
     def reverse(self, value):

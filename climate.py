@@ -93,7 +93,7 @@ class ClimateController(LenferController):
 
     def __init__(self, device, conf):        
         LenferController.__init__(self, device)
-        self.limits = conf['limits']
+        self.limits = device.settings['limits']
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
         self._switches = conf['switches']

@@ -2,9 +2,7 @@ import gc
 import re
 
 import uasyncio
-import network
 import machine
-from machine import Pin
 import ujson
 import ulogging
 
@@ -13,7 +11,7 @@ import picoweb
 from wlan import WlanController
 from lenfer_device import LenferDevice
 from software_update import load_version, perform_software_update
-from utils import load_json, save_json, manage_memory
+from utils import manage_memory
 
 APP = picoweb.WebApp(__name__)
 
@@ -44,7 +42,7 @@ async def limits(req, rsp):
         if req.method == "POST":
             await req.read_json()
             ctrl.limits.update(req.json)
-            DEVICE.save_conf()
+            DEVICE.save_settings()
         await send_json(rsp, ctrl.limits)
 
 @APP.route(re.compile(r'/api/(\w+)/sensors/info'))
@@ -87,12 +85,12 @@ async def timers(req, rsp):
                     ctrl.add_timer(timer_conf)
                 else:
                     ctrl.update_timer(int(key), timer_conf)
-            DEVICE.save_conf()
+            DEVICE.save_settings()
         elif req.method == 'DELETE':
             await req.read_json()
             ctrl.delete_timer(req.json)
-            DEVICE.save_conf()
-        await send_json(rsp, ctrl._conf['timers'])
+            DEVICE.save_settings()
+        await send_json(rsp, DEVICE.settings['timers'])
 
 @APP.route('/api/settings/wlan')
 async def get_wlan_settings(req, rsp):
@@ -129,7 +127,7 @@ async def get_data(req, rsp):
 async def get_time(req, rsp):
     if req.method == 'POST':
         ctrl = DEVICE.modules['rtc']
-        await req.read_json()        
+        await req.read_json()
         if ctrl:
             ctrl.set_time(req.json)
         else:
@@ -164,4 +162,3 @@ async def get_modules(req, rsp):
 DEVICE.start_async()
 gc.collect()
 APP.run(debug=True, host=WLAN.host, port=80)
-

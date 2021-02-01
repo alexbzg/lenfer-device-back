@@ -12,7 +12,7 @@ import ulogging
 import urequests
 
 from timers import RtcController
-from utils import load_json, load_conf, save_conf, manage_memory
+from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
 
 LOG = ulogging.getLogger("Main")
@@ -24,14 +24,14 @@ class LenferDevice:
 
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
-    def save_conf(self):
-        save_conf(self.conf)
+    def save_settings(self):
+        save_json(self.settings, 'settings.json')
         self.status["ssid_delay"] = True
 
-    def load_def_conf(self):
-        self.conf = load_conf(use_default=True)
-        print('default config loaded')
-        self.save_conf()
+    def load_def_settings(self):
+        self.settings = load_json('settings_default.json')
+        print('default settings loaded')
+        self.save_settings()
 
     def __init__(self, wlan):
         self._schedule = None
@@ -43,22 +43,22 @@ class LenferDevice:
             "ssid_failure": False,
             "ssid_delay": False
             }
-        self.conf = load_conf()
+        self._conf = load_json('conf.json')
+        self.settings = load_json('settings.json')
+        if not self.settings:
+            self.load_def_settings()
 
-        if not self.conf:
-            self.load_def_conf()
-
-        wlan_switch_button = Pin(self.conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
+        wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
         wlan_switch_button.irq(self.wlan_switch_irq)
 
-        if 'factory_reset' in self.conf and self.conf['factory_reset']:
-            factory_reset_button = Pin(self.conf['factory_reset'], Pin.IN)
+        if 'factory_reset' in self._conf and self._conf['factory_reset']:
+            factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
             factory_reset_button.irq(self.factory_reset_irq)
 
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
-            for i2c_conf in self.conf['i2c']]
-        self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self.conf['leds'].items()}
+            for i2c_conf in self._conf['i2c']]
+        self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self._conf['leds'].items()}
         self.id = load_json('id.json')
         if 'debug' in self.id and self.id['debug']:
             self.server_uri = SERVER_URI_DEV
@@ -66,14 +66,14 @@ class LenferDevice:
             self.server_uri = SERVER_URI
         for led in self.leds.values():
             led.off()
-        for module, module_conf in self.conf['modules'].items():
+        for module, module_conf in self._conf['modules'].items():
             if module_conf['enabled']:
                 try:
                     if module == 'climate':
                         from climate import ClimateController
                         self.modules[module] = ClimateController(self, module_conf)
                     elif module == 'rtc':
-                        self.modules[module] = RtcController(module_conf, self.conf['i2c'])
+                        self.modules[module] = RtcController(module_conf, self._conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
                     elif module == 'relays':
                         from relay import RelaysController
@@ -85,11 +85,7 @@ class LenferDevice:
                     LOG.exc(exc, 'Controller initialization error')
                     LOG.error(module)
                     LOG.error(module_conf)
-        with open('schedule.json', 'r') as file_schedule:
-            try:
-                self.schedule = ujson.load(file_schedule)
-            except Exception as exc:
-                LOG.exc(exc, 'Schedule loading error')
+        self.schedule = load_json('schedule.json')
         if not self.schedule:
             self.schedule = {'hash': None, 'start': None}
 
@@ -102,12 +98,7 @@ class LenferDevice:
         while True:
             await uasyncio.sleep(5)
             if self.status['wlan_switch'] and self._wlan.mode() != network.AP_IF:
-                self.enable_ssid(False)
-
-    def enable_ssid(self, val):
-        self._wlan.conf['enable_ssid'] = val
-        self._wlan.save_conf()
-        machine.reset()
+                self._wlan.enable_ssid(False)
 
     async def delayed_ssid_switch(self):
         LOG.info("delayed wlan switch activated")
@@ -116,7 +107,7 @@ class LenferDevice:
             if self.status["ssid_delay"]:
                 self.status["ssid_delay"] = False
             else:
-                self.enable_ssid(True)
+                self._wlan.enable_ssid(True)
 
     def factory_reset_irq(self, pin):
         if pin.value():
@@ -137,7 +128,8 @@ class LenferDevice:
                 return
         for led in self.leds.values():
             led.on()
-        self.load_def_conf()
+        self.load_def_settings()
+        self._wlan.load_def_conf()
         machine.reset()
 
     @property
@@ -188,20 +180,19 @@ class LenferDevice:
                     'hash': self.schedule['hash'],
                     'start': self.schedule['start']
                 },
-                'props': {}
+                'props': self.settings
             }
-            for ctrl in self.modules.values():
-                if ctrl:
-                    data['props'].update(ctrl.get_updates_props())
             updates = self.srv_post('device_updates', data)
             if updates:
                 if 'schedule' in updates:
                     self.schedule = updates['schedule']
                 if 'props' in updates:
+                    self.settings = updates['props']
+                    self.save_settings()
                     for ctrl in self.modules.values():
                         if ctrl:
-                            ctrl.set_updates_props(updates['props'])
-                    self.save_conf()
+                            ctrl.update_settings()
+                    self.save_settings()
 
             await uasyncio.sleep(30)
 

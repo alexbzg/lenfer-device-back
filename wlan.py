@@ -1,6 +1,7 @@
 from time import sleep
 
 import network
+import machine
 
 import ulogging
 
@@ -45,5 +46,14 @@ class WlanController:
     def save_conf(self):
         save_json(self.conf, 'wlan.json')
 
+    def load_def_conf(self):
+        self.conf = load_json('wlan_default.json')
+        self.save_conf()
+
     def online(self):
         return self.mode == network.STA_IF and self.nic and self.nic.isconnected()
+
+    def enable_ssid(self, val):
+        self.conf['enable_ssid'] = val
+        self.save_conf()
+        machine.reset()

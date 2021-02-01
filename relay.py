@@ -17,7 +17,7 @@ class RelaysController(LenferController):
         self._active = {'timer': False, 'manual': False}
 
         self.timers = []
-        for timer_conf in conf['timers']:
+        for timer_conf in device.settings['timers']:
             self.timers.append(self.create_timer(timer_conf))
 
         self.button = Pin(conf['button'], Pin.IN) if conf["button"] else None
@@ -58,12 +58,13 @@ class RelaysController(LenferController):
 
     def update_timer(self, timer_idx, timer_conf):
         self.timers[timer_idx].off()
-        self._conf['timers'][timer_idx] = timer_conf
+        self.device.settings['timers'][timer_idx] = timer_conf
         self.timers[timer_idx] = self.create_timer(timer_conf)
     
-    def delete_timer(self, timer_idx):
+    def delete_timer(self, timer_idx, change_settings=True):
         self.timers[timer_idx].off()
-        del self._conf['timers'][timer_idx]
+        if change_settings:
+            del self.device.settings['timers'][timer_idx]
         del self.timers[timer_idx]
 
     async def check_timers(self):
@@ -75,11 +76,8 @@ class RelaysController(LenferController):
             gc.collect()
             await uasyncio.sleep(60)
 
-    def get_updates_props(self):
-        return {'timers': self._conf['timers']}
-
-    def set_updates_props(self, data):
-        if 'timers' in data:
-            while self.timers:                
-                self.delete_timer(0)
-            self.init_timers(data['timers'])
+    def update_settings(self):
+        if 'timers' in self.device.settings:
+            while self.timers:
+                self.delete_timer(0, change_settings=False)
+            self.init_timers(self.device.settings['timers'])
