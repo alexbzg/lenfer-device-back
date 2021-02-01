@@ -4,8 +4,6 @@ import micropython
 import ujson
 import ulogging 
 
-LOG = ulogging.getLogger("Main")
-
 def load_conf(use_default=False):
     conf_path = 'conf_default.json' if use_default else 'conf.json'
     return load_json(conf_path)
@@ -14,6 +12,7 @@ def save_conf(conf):
     save_json(conf, 'conf.json')
 
 def load_json(path):
+    LOG = ulogging.getLogger("Main")
     try:
         with open(path, 'r', encoding="utf-8") as _file:
             return ujson.load(_file)
@@ -22,6 +21,7 @@ def load_json(path):
         return None
 
 def save_json(data, path):
+    LOG = ulogging.getLogger("Main")
     try:
         with open(path, 'w', encoding="utf-8") as _file:
             _file.write(ujson.dumps(data))

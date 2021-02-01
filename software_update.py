@@ -5,12 +5,20 @@ import uos
 import ulogging
 import urequests
 
-from utils import load_json, save_json
+from utils import load_json, save_json, manage_memory
 
 
 LOG = ulogging.getLogger("Main")
 
 UPDATES_SERVER_URL = 'http://my.lenfer.ru/device/'
+UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
+
+def updates_url():
+    id_data = load_json('id.json')
+    if 'debug' in id_data and id_data['debug']:
+        return UPDATES_SERVER_URL_DEV
+    else:
+        return UPDATES_SERVER_URL
 
 def get_device_type():
     id_data = load_json('id.json')
@@ -38,12 +46,16 @@ def check_software_update():
     srv_versions = load_srv_json('devices')
     return srv_versions and device_type in srv_versions and version_data['hash'] != srv_versions[device_type]
 
-def load_srv_json(file):
+def load_srv_json(file, srv_url=None):
+    if not srv_url:
+        srv_url = updates_url()
     try:
-        return ujson.load(urequests.get(UPDATES_SERVER_URL + file + '.json').raw)
+        return ujson.load(urequests.get(srv_url + file + '.json').raw)
     except Exception as exc:
         LOG.exc(exc, 'Error loading server data: %s' % file)
         return None
+    finally:
+        manage_memory()
 
 def schedule_software_update():
     version_data = load_version()
@@ -53,11 +65,13 @@ def schedule_software_update():
 
 def perform_software_update():
     wdt = machine.WDT(timeout=20000)
+    manage_memory()
     version_data = load_version()
     device_type = get_device_type()
-    srv_index = load_srv_json('index')
+    srv_url = updates_url()
+    srv_index = load_srv_json('index', srv_url=srv_url)
     wdt.feed()
-    srv_versions = load_srv_json('devices')
+    srv_versions = load_srv_json('devices', srv_url=srv_url)
     wdt.feed()
     if srv_index:
         for path, entry in srv_index.items():
@@ -69,7 +83,7 @@ def perform_software_update():
             print(local_path)
             ensure_file_path(local_path)
             with open(local_path, 'wb') as local_file:
-                file_url = UPDATES_SERVER_URL + 'software/' + path
+                file_url = srv_url + 'software/' + path
                 print(file_url)
                 rsp = urequests.get(file_url)
                 if rsp:
@@ -100,5 +114,3 @@ def ensure_file_path(path):
                 uos.mkdir(parent)
             except OSError:
                 pass
-
-  

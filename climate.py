@@ -10,6 +10,7 @@ import ulogging
 
 import BME280
 from lenfer_controller import LenferController
+from utils import manage_memory
 
 LOG = ulogging.getLogger("Climate")
 
@@ -99,12 +100,22 @@ class ClimateController(LenferController):
         self._sleep = conf['sleep']
         self.data = {}
         self.sensor_devices = []
-        self.heat = Pin(conf["switches"]['heat'], Pin.OUT)
-        self.heat.value(0)
-        self.vent_out = Pin(conf["switches"]['vent_out'], Pin.OUT)
-        self.vent_out.value(0)
-        self.vent_mix = Pin(conf["switches"]['vent_mix'], Pin.OUT)
-        self.vent_mix.value(0)
+        if 'switches' in conf and conf['switches']:
+            self.heat = (Pin(conf["switches"]['heat'], Pin.OUT) 
+                if 'heat' in conf['switches'] and conf['switches']['heat']
+                else None)
+            if self.heat:
+                self.heat.value(0)
+            self.vent_out = (Pin(conf["switches"]['vent_out'], Pin.OUT)
+                if 'vent_out' in conf['switches'] and conf['switches']['vent_out']
+                else None)
+            if self.vent_out:
+                self.vent_out.value(0)          
+            self.vent_mix = (Pin(conf["switches"]['vent_mix'], Pin.OUT)
+                if 'vent_mix' in conf['switches'] and conf['switches']['vent_mix']
+                else None)
+            if self.vent_mix:
+                self.vent_mix.value(0)
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
@@ -120,47 +131,53 @@ class ClimateController(LenferController):
             await uasyncio.sleep_ms(self._sleep)
             for sensor_device in self.sensor_devices:
                 sensor_device.read()
-                temp = [
-                    self.data[self.sensors_roles['temperature'][0]],
-                    self.data[self.sensors_roles['temperature'][1]]
-                    ]
-                humid = self.data[self.sensors_roles['humidity'][0]]
-                temp_limits, humid_limits = None, None
-                if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
-                    day_no = 0
-                    start = utime.mktime(self.schedule['start'])
-                    today = utime.mktime(machine.RTC().datetime())
-                    if start < today:
-                        day_no = int((today-start)/86400)
-                    if day_no >= len(self.schedule['items']):
-                        day_no = len(self.schedule['items']) - 1
-                    day = self.schedule['items'][day_no]
-                    temp_idx = self.schedule['params'].index('temperature')
-                    temp_delta = float(day[temp_idx][1])
-                    temp_limits = [
-                        float(day[temp_idx][0]) - temp_delta,
-                        float(day[temp_idx][0]) + temp_delta,
-                    ]
+            if self._switches:
+                self.adjust_switches()
+            manage_memory()
 
-                    humid_idx = self.schedule['params'].index('humidity')
-                    humid_delta = float(day[humid_idx][1])
-                    humid_limits = [
-                        float(day[humid_idx][0]) - humid_delta,
-                        float(day[humid_idx][0]) + humid_delta,
-                    ]
+    def adjust_switches(self):
+            temp = [
+                self.data[self.sensors_roles['temperature'][0]],
+                self.data[self.sensors_roles['temperature'][1]]
+                ]
+            humid = self.data[self.sensors_roles['humidity'][0]]
+            temp_limits, humid_limits = None, None
+            if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
+                day_no = 0
+                start = utime.mktime(self.schedule['start'])
+                today = utime.mktime(machine.RTC().datetime())
+                if start < today:
+                    day_no = int((today-start)/86400)
+                if day_no >= len(self.schedule['items']):
+                    day_no = len(self.schedule['items']) - 1
+                day = self.schedule['items'][day_no]
+                temp_idx = self.schedule['params'].index('temperature')
+                temp_delta = float(day[temp_idx][1])
+                temp_limits = [
+                    float(day[temp_idx][0]) - temp_delta,
+                    float(day[temp_idx][0]) + temp_delta,
+                ]
 
-                else:
-                    temp_limits = [
-                        self.limits['temperature'][0] - self.limits['temperature'][1],
-                        self.limits['temperature'][0] + self.limits['temperature'][1],
-                    ]
+                humid_idx = self.schedule['params'].index('humidity')
+                humid_delta = float(day[humid_idx][1])
+                humid_limits = [
+                    float(day[humid_idx][0]) - humid_delta,
+                    float(day[humid_idx][0]) + humid_delta,
+                ]
 
-                    humid_limits = [
-                        self.limits['humidity'][0] - self.limits['humidity'][1],
-                        self.limits['humidity'][0] + self.limits['humidity'][1],
-                    ]
+            else:
+                temp_limits = [
+                    self.limits['temperature'][0] - self.limits['temperature'][1],
+                    self.limits['temperature'][0] + self.limits['temperature'][1],
+                ]
 
-                if temp[0]:
+                humid_limits = [
+                    self.limits['humidity'][0] - self.limits['humidity'][1],
+                    self.limits['humidity'][0] + self.limits['humidity'][1],
+                ]
+
+            if temp[0]:
+                if self.heat:
                     if temp[0] < temp_limits[0]:
                         if not self.heat.value():
                             self.heat.value(1)
@@ -169,6 +186,7 @@ class ClimateController(LenferController):
                         if self.heat.value():
                             self.heat.value(0)
                             LOG.info('Heat off')
+                if self.vent_mix:
                     if temp[1]:
                         if temp[0] > temp[1] + 3 or temp[0] < temp[1] - 3:
                             if not self.vent_mix.value():
@@ -178,10 +196,12 @@ class ClimateController(LenferController):
                             if self.vent_mix.value():
                                 self.vent_mix.value(0)
                                 LOG.info('Mix off') 
+            if self.vent_mix:
                 if not temp[0] or not temp[1]:
                     if self.vent_mix.value():
                         self.vent_mix.value(0)
                         LOG.info('Mix off')
+            if self.vent_out:
                 if (humid and humid > humid_limits[1]) or\
                     (temp[0] and temp[0] > temp_limits[1]):
                     if not self.vent_out.value():

@@ -29,11 +29,7 @@
                     "sensors_ids": [5]
                 }
             ],
-            "switches": {
-                "heat": 33,
-                "vent_out": 32,
-                "vent_mix": 13
-            },
+            "switches": false,
             "sensors_roles": {
                 "temperature": [2,4,5],
                 "humidity": [3]

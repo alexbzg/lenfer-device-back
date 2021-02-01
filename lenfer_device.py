@@ -17,7 +17,8 @@ from software_update import check_software_update, schedule_software_update
 
 LOG = ulogging.getLogger("Main")
 
-SERVER_URI = "http://dev-api.lenfer.ru/api/"
+SERVER_URI = "http://my.lenfer.ru/api/"
+SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
 
@@ -59,6 +60,10 @@ class LenferDevice:
             for i2c_conf in self.conf['i2c']]
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self.conf['leds'].items()}
         self.id = load_json('id.json')
+        if 'debug' in self.id and self.id['debug']:
+            self.server_uri = SERVER_URI_DEV
+        else:
+            self.server_uri = SERVER_URI
         for led in self.leds.values():
             led.off()
         for module, module_conf in self.conf['modules'].items():
@@ -164,7 +169,7 @@ class LenferDevice:
     async def bg_leds(self):
         while True:
             self.WDT.feed()
-            await self.blink(("status",), 1 if self.status["wlan"] == network.AP_IF else 2, 100)
+            await self.blink(("status",), 1 if self._wlan.mode == network.AP_IF else 2, 100)
             await uasyncio.sleep(5)
             gc.collect()
 
@@ -238,12 +243,12 @@ class LenferDevice:
             data['token'] = self.id['token']
             manage_memory()
             self.WDT.feed()
-            rsp = urequests.post(SERVER_URI + url, json=data, parse_headers=False)
+            rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
         except Exception as exc:
             LOG.exc(exc, 'Data posting error')
-            LOG.error("URL: %s", SERVER_URI + url)
+            LOG.error("URL: %s", self.server_uri + url)
             LOG.error("data: %s", data)
         finally:
             self.WDT.feed()
@@ -281,7 +286,8 @@ class LenferDevice:
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
         if self.online():
-            loop.create_task(self.check_updates())
+            if ('updates' in self.id and self.id['updates']):
+                loop.create_task(self.check_updates())
             loop.create_task(self.task_check_software_updates())
 
         self.post_log('device start')

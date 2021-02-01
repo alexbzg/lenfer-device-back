@@ -27,7 +27,7 @@ if WLAN.online():
     if software_version['update']:
         perform_software_update()
         machine.reset()
-    
+
 manage_memory()
 
 DEVICE = LenferDevice(WLAN)
@@ -129,11 +129,11 @@ async def get_data(req, rsp):
 async def get_time(req, rsp):
     if req.method == 'POST':
         ctrl = DEVICE.modules['rtc']
+        await req.read_json()        
         if ctrl:
-            await req.read_json()
             ctrl.set_time(req.json)
         else:
-            machine.RTC().datetime(req.json)    
+            machine.RTC().datetime(req.json)
     await send_json(rsp, machine.RTC().datetime())
 
 @APP.route('/')
@@ -164,3 +164,4 @@ async def get_modules(req, rsp):
 DEVICE.start_async()
 gc.collect()
 APP.run(debug=True, host=WLAN.host, port=80)
+

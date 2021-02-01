@@ -35,8 +35,10 @@ class WlanController:
             self.nic = network.WLAN(network.AP_IF)
             self.nic.active(True)
             authmode = 4 if self.conf['ap_key'] else 0
-            self.nic.config(essid=self.conf['name'], password=self.conf['ap_key'], authmode=authmode)
-            self.nic.ifconfig((self.conf['address'], self.conf['mask'], self.conf['address'], self.conf['address']))
+            self.nic.config(essid=self.conf['name'], password=self.conf['ap_key'],
+                authmode=authmode)
+            self.nic.ifconfig((self.conf['address'], self.conf['mask'], self.conf['address'], 
+                self.conf['address']))
             self.host = self.conf['address']
             self.mode = network.AP_IF
 
