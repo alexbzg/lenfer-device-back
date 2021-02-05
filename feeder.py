@@ -30,7 +30,7 @@ class FeederController(RelaysController):
     def __init__(self, device, conf):
 
         RelaysController.__init__(self, device, conf['relay'])
-        self._power_monitor = PowerMonitor(conf['power_monitor'], device.conf['i2c'])
+        self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
         self._reverse_threshold = device.settings['reverse_threshold']

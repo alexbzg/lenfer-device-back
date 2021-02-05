@@ -93,7 +93,7 @@ class ClimateController(LenferController):
 
     def __init__(self, device, conf):        
         LenferController.__init__(self, device)
-        self.limits = device.settings['limits']
+        self.limits = device.settings['limits'] if 'limits' in device.settings else False
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
         self._switches = conf['switches']
@@ -114,13 +114,13 @@ class ClimateController(LenferController):
             self.vent_mix = (Pin(conf["switches"]['vent_mix'], Pin.OUT)
                 if 'vent_mix' in conf['switches'] and conf['switches']['vent_mix']
                 else None)
-            if self.vent_mix:
+            if self.vent_mix: 
                 self.vent_mix.value(0)
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
-                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device.conf['ow']))
+                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
 
     async def read(self):
 

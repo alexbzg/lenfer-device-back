@@ -49,7 +49,7 @@ async def limits(req, rsp):
 async def get_sensors_info(req, rsp):
     ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
     ctrl = DEVICE.modules[ctrl_type]
-    if ctrl and hasattr(ctrl, 'sensors_roles'):
+    if ctrl and hasattr(ctrl, 'sensors_roles'): 
         await send_json(rsp, [
             {'type': _type,
              'limits': ctrl.limits[_type],

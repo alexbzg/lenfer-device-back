@@ -33,7 +33,7 @@ class LenferDevice:
         print('default settings loaded')
         self.save_settings()
 
-    def __init__(self, wlan):
+    def __init__(self, wlan): 
         self._schedule = None
         self._wlan = wlan
         self.status = {
