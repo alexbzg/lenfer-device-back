@@ -184,16 +184,14 @@ class LenferDevice:
             }
             updates = self.srv_post('device_updates', data)
             if updates:
-                if 'schedule' in updates:
+                if 'schedule' in updates and updates['schedule']:
                     self.schedule = updates['schedule']
-                if 'props' in updates:
+                if 'props' in updates and updates['props']:
                     self.settings = updates['props']
                     self.save_settings()
                     for ctrl in self.modules.values():
                         if ctrl:
                             ctrl.update_settings()
-                    self.save_settings()
-
             await uasyncio.sleep(30)
 
     async def post_sensor_data(self):

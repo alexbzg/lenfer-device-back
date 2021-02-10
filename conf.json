@@ -1,51 +1,84 @@
 {
     "modules": {
         "climate": {
-            "enabled": true,
+            "enabled": false,
             "sensor_devices": [
                 {
                     "type": "bme280",
                     "i2c": 0,
-                    "sensors_ids": [6, 7]
+                    "sensors_ids": [2, 3]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [8]
-                },                
-                {
-                    "type": "ds18x20",
-                    "ow": 1,
-                    "sensors_ids": [9]
+                    "sensors_ids": [4]
                 },
                 {
                     "type": "ds18x20",
-                    "ow": 2,
-                    "sensors_ids": [10]
+                    "ow": 1,
+                    "sensors_ids": [5]
                 }
             ],
-            "switches": false,
-            "limits": false,
-            "sensors_roles": false,
+            "switches": {
+                "heat": 33,
+                "vent_out": 32,
+                "vent_mix": 13
+            },
+            "sensors_roles": {
+                "temperature": [2,4,5],
+                "humidity": [3]
+            },
             "sensors_titles": {
-                "1": "BME280",
-                "2": "BME280",
-                "3": "D1",
-                "4": "D2",
-                "5": "D3"
+                "2": "низ",
+                "3": "низ",
+                "4": "верх",
+                "5": "снаружи"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": [60, 10]
             },
             "sleep": 750
-        }
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        },
+        "relays": {
+            "enabled": false,
+            "button": null,
+            "relay": null,
+            "timers": []
+        },
+        "power_monitor": {
+            "enabled": false
+        },
+        "feeder": {
+            "enabled": true,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            },
+            "reverse": 25,
+            "reverse_threshold": 1000,
+            "reverse_duration": 5,
+            "buttons": [16, 13],
+            "relay": {
+                "button": null,
+                "pin": 33,
+                "timers": []
+            }
+        }    
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 23,
-        "sda": 22
+        "scl": 19,
+        "sda": 21
     }],
-    "ow": [16, 17, 18],
+    "ow": [],
     "leds": {
-        "status": 13
+        "status": 23
     },
-    "factory_reset": 13,
-    "wlan_switch": 32
+    "factory_reset": 32,
+    "wlan_switch": 22
 }

@@ -30,7 +30,8 @@ class FeederController(RelaysController):
     def __init__(self, device, conf):
 
         RelaysController.__init__(self, device, conf['relay'])
-        self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
+        self._power_monitor = (PowerMonitor(conf['power_monitor'], device._conf['i2c'])
+                               if conf['power_monitor'] else None)
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
         self._reverse_threshold = device.settings['reverse_threshold']
@@ -68,16 +69,17 @@ class FeederController(RelaysController):
                 'start' if self.state else 'stop',
                 ' (reverse) ' if self.reverse else '',
                 source))
-            if value and source == 'manual':
+            if value and source == 'manual' and self._power_monitor:
                 uasyncio.get_event_loop().create_task(self.check_current())
             if not value:
                 self.reverse = False
 
     async def check_current(self):
-        while self.state:
-            await uasyncio.sleep(1)
-            cur = self._power_monitor.current()
-            self.device.post_log("Feeder current: {0:+.2f}".format(cur))
+        if self._power_monitor:
+            while self.state:
+                await uasyncio.sleep(1)
+                cur = self._power_monitor.current()
+                self.device.post_log("Feeder current: {0:+.2f}".format(cur))
 
     async def run_for(self, duration):
         start = utime.time()
@@ -89,11 +91,12 @@ class FeederController(RelaysController):
         while expired < duration and retries < 3:
             await uasyncio.sleep(1)
             now = utime.time()
-            cur = self._power_monitor.current()
-            self.device.post_log("Feeder current: {0:+.2f}".format(cur))
+            cur = self._power_monitor.current() if self._power_monitor else None
+            if cur:
+                self.device.post_log("Feeder current: {0:+.2f}".format(cur))
             expired += now - prev_time
             prev_time = now
-            if cur > self._reverse_threshold:
+            if cur and cur > self._reverse_threshold:
                 await self.engine_reverse(True)
                 await uasyncio.sleep(self._reverse_duration)
                 expired -= self._reverse_duration + 2 * self._reverse_delay
