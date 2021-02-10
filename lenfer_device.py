@@ -240,7 +240,8 @@ class LenferDevice:
             LOG.error("URL: %s", self.server_uri + url)
             LOG.error("data: %s", data)
         finally:
-            self.WDT.feed()
+            if hasattr(self, 'WDT'):
+                self.WDT.feed()
         if rsp:
             if raw:
                 return rsp.raw
