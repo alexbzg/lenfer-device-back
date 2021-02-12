@@ -1,7 +1,7 @@
 {
-    "id": 15,
-    "hash": "m0nr03",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjE1fQ.09TnjI38pBuK-FTu5BSpsHDGp1AWB4hf0H-UA4mK4Yg",
+    "id": 11, 
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjExfQ.J4jKLdtwPukshFzVBozR_S9AvxD9O3syvHTExx8quQc",
+    "hash": "4Pk4BY",
     "type": "feeder",
     "updates": true
 }

@@ -41,8 +41,10 @@ class LenferDevice:
             "factory_reset": False,
             "wlan_switch": False,
             "ssid_failure": False,
-            "ssid_delay": False
+            "ssid_delay": False,
+            "srv_req_pending": False
             }
+        self._log_queue = []
         self._conf = load_json('conf.json')
         self.settings = load_json('settings.json')
         if not self.settings:
@@ -182,7 +184,7 @@ class LenferDevice:
                 },
                 'props': self.settings
             }
-            updates = self.srv_post('device_updates', data)
+            updates = await self.srv_post('device_updates', data)
             if updates:
                 if 'schedule' in updates and updates['schedule']:
                     self.schedule = updates['schedule']
@@ -203,20 +205,24 @@ class LenferDevice:
                 if ctrl and hasattr(ctrl, 'data'):
                     data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                         for _id, value in ctrl.data.items()]
-            self.srv_post('sensors_data', data)
+            await self.srv_post('sensors_data', data)
 
-    def post_log(self, entries):
+    async def post_log(self, entries):
         LOG.info(entries)
         if self.online():
             tstamp = self.post_tstamp()
             if isinstance(entries, str):
                 entries = [entries,]
-            for idx in range(len(entries)):
-                if isinstance(entries[idx], str):
-                    entries[idx] = {'txt': entries[idx]}
+            for idx, entry in enumerate(entries):
+                if isinstance(entry, str):
+                    entries[idx] = {'txt': entry}
                 if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
                     entries[idx]['log_tstamp'] = tstamp
-            self.srv_post('devices_log/post', {'entries': entries})
+            self._log_queue.extend(entries)
+            if not self.status['srv_req_pending']:
+                await self.srv_post('devices_log/post', {'entries': self._log_queue})
+                self._log_queue = []
+                manage_memory()
 
     @staticmethod
     def post_tstamp(time_tuple=None):
@@ -224,7 +230,10 @@ class LenferDevice:
             time_tuple = machine.RTC().datetime()
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
-    def srv_post(self, url, data, raw=False):
+    async def srv_post(self, url, data, raw=False):
+        while self.status['srv_req_pending']:
+            await uasyncio.sleep_ms(50)
+        self.status['srv_req_pending'] = True
         rsp = None
         result = None
         try:
@@ -251,8 +260,9 @@ class LenferDevice:
                 LOG.exc(exc, 'Server response reading error')
                 print(rsp.raw.read())
             finally:
-                rsp.close() 
+                rsp.close()
                 rsp = None
+                self.status['srv_req_pending'] = False
         manage_memory()
         return result
 
@@ -280,5 +290,5 @@ class LenferDevice:
                 loop.create_task(self.check_updates())
             loop.create_task(self.task_check_software_updates())
 
-        self.post_log('device start')
+        loop.create_task(self.post_log('device start'))
 

@@ -62,10 +62,13 @@ class FeederController(RelaysController):
     def state(self, value):
         self.on(value=value)
 
+    def post_log(self, txt):
+        uasyncio.get_event_loop().create_task(self.device.post_log(txt))
+
     def on(self, value=True, source='timer'):
         if self.state != value:
             RelaysController.on(self, value, source)
-            self.device.post_log("Feeder {0} {1}{2}".format(
+            self.post_log("Feeder {0} {1}{2}".format(
                 'start' if self.state else 'stop',
                 ' (reverse) ' if self.reverse else '',
                 source))
@@ -79,7 +82,7 @@ class FeederController(RelaysController):
             while self.state:
                 await uasyncio.sleep(1)
                 cur = self._power_monitor.current()
-                self.device.post_log("Feeder current: {0:+.2f}".format(cur))
+                self.post_log("Feeder current: {0:+.2f}".format(cur))
 
     async def run_for(self, duration):
         start = utime.time()
@@ -93,7 +96,7 @@ class FeederController(RelaysController):
             now = utime.time()
             cur = self._power_monitor.current() if self._power_monitor else None
             if cur:
-                self.device.post_log("Feeder current: {0:+.2f}".format(cur))
+                self.post_log("Feeder current: {0:+.2f}".format(cur))
             expired += now - prev_time
             prev_time = now
             if cur and cur > self._reverse_threshold:
@@ -128,5 +131,5 @@ class FeederController(RelaysController):
     @reverse.setter
     def reverse(self, value):
         if value != self.reverse:
-            self.device.post_log("Feeder reverse {0}".format('on' if value else 'off'))
+            self.post_log("Feeder reverse {0}".format('on' if value else 'off'))
             self._reverse.value(value)

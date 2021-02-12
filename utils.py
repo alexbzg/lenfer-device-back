@@ -24,8 +24,8 @@ def save_json(data, path):
 def manage_memory():
     gc.collect()
     gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
-    micropython.mem_info()
-    print('-----------------------------')
-    print('Free: {} allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
+#    micropython.mem_info()
+#    print('-----------------------------')
+#    print('Free: {} allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
 
 
