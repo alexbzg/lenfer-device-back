@@ -286,9 +286,10 @@ class LenferDevice:
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
         if self.online():
-            if ('updates' in self.id and self.id['updates']):
+            if 'updates' in self.id and self.id['updates']:
                 loop.create_task(self.check_updates())
-            loop.create_task(self.task_check_software_updates())
+            if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
+                loop.create_task(self.task_check_software_updates())
 
         loop.create_task(self.post_log('device start'))
 
