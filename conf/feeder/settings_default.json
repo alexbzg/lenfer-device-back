@@ -1,5 +1,5 @@
 {
-    "reverse_threshold": 1000,
+    "reverse_threshold": 2.5,
     "reverse_duration": 5,
     "timers": []
 }

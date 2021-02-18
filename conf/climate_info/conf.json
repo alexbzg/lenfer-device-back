@@ -42,10 +42,10 @@
         "scl": 23,
         "sda": 22
     }],
-    "ow": [16, 18, 21],
+    "ow": [16, 17, 18],
     "leds": {
-        "status": 13
+        "status": 32
     },
     "factory_reset": 27,
-    "wlan_switch": 32
+    "wlan_switch": 33
 }

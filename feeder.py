@@ -1,24 +1,9 @@
-from machine import Pin, I2C
+from machine import Pin, ADC
 import uasyncio
 import utime
 
-from ina219 import INA219
-
 from relay import RelaysController
 from timers import Timer
-
-class PowerMonitor:
-
-    def __init__(self, conf, _i2c):
-        i2c = _i2c[conf["i2c"]]
-        self._ina219 = INA219(conf["shunt_ohms"], I2C(scl=Pin(i2c["scl"]), sda=Pin(i2c["sda"])))
-        self._ina219.configure()
-
-    def voltage(self):
-        return self._ina219.voltage()
-
-    def current(self):
-        return self._ina219.current()
 
 class FeederTimer(Timer):
 
@@ -30,14 +15,15 @@ class FeederController(RelaysController):
     def __init__(self, device, conf):
 
         RelaysController.__init__(self, device, conf['relay'])
-        self._power_monitor = (PowerMonitor(conf['power_monitor'], device._conf['i2c'])
-                               if conf['power_monitor'] else None)
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
         self._reverse_threshold = device.settings['reverse_threshold']
         self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
         self._delay = 0
+        self._adc = ADC(Pin(conf['adc'])) if 'adc' in conf and conf['adc'] else None
+        if self._adc:
+            self._adc.atten(ADC.ATTN_11DB)
         if conf['buttons']:
             for idx, pin in enumerate(conf['buttons']):
                 button = Pin(pin, Pin.IN, Pin.PULL_UP)
@@ -72,17 +58,24 @@ class FeederController(RelaysController):
                 'start' if self.state else 'stop',
                 ' (reverse) ' if self.reverse else '',
                 source))
-            if value and source == 'manual' and self._power_monitor:
+            if value and source == 'manual' and self._adc:
                 uasyncio.get_event_loop().create_task(self.check_current())
             if not value:
                 self.reverse = False
 
     async def check_current(self):
-        if self._power_monitor:
+        if self._adc:
             while self.state:
                 await uasyncio.sleep(1)
-                cur = self._power_monitor.current()
-                self.post_log("Feeder current: {0:+.2f}".format(cur))
+                voltage = self.adc_read()
+                self.post_log("Feeder voltage: {0:+.2f}".format(voltage))
+
+    def adc_read(self):
+        if self._adc:
+            val = self._adc.read()
+            return val / 568.75
+        else:
+            return None
 
     async def run_for(self, duration):
         start = utime.time()
@@ -94,12 +87,12 @@ class FeederController(RelaysController):
         while expired < duration and retries < 3:
             await uasyncio.sleep(1)
             now = utime.time()
-            cur = self._power_monitor.current() if self._power_monitor else None
-            if cur:
-                self.post_log("Feeder current: {0:+.2f}".format(cur))
+            voltage = self.adc_read()
+            if voltage:
+                self.post_log("Feeder voltage: {0:+.2f}".format(voltage))
             expired += now - prev_time
             prev_time = now
-            if cur and cur > self._reverse_threshold:
+            if voltage and voltage > self._reverse_threshold:
                 await self.engine_reverse(True)
                 await uasyncio.sleep(self._reverse_duration)
                 expired -= self._reverse_duration + 2 * self._reverse_delay

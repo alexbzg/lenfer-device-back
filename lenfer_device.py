@@ -99,7 +99,7 @@ class LenferDevice:
     async def check_wlan_switch(self):
         while True:
             await uasyncio.sleep(5)
-            if self.status['wlan_switch'] and self._wlan.mode() != network.AP_IF:
+            if self.status['wlan_switch'] and self._wlan.mode != network.AP_IF:
                 self._wlan.enable_ssid(False)
 
     async def delayed_ssid_switch(self):
