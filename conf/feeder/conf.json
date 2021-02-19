@@ -8,13 +8,21 @@
                 "button": null,
                 "pin": 22
             },
-            "adc": 25
-        }    
+            "adc": 35,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            }
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        }        
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 33,
-        "sda": 32
+        "scl": 32,
+        "sda": 33
     }],
     "ow": [],
     "leds": {
