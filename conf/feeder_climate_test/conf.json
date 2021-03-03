@@ -1,54 +1,8 @@
 {
     "modules": {
-        "climate": {
-            "enabled": false,
-            "sensor_devices": [
-                {
-                    "type": "bme280",
-                    "i2c": 0,
-                    "sensors_ids": [2, 3]
-                },
-                {
-                    "type": "ds18x20",
-                    "ow": 0,
-                    "sensors_ids": [4]
-                },
-                {
-                    "type": "ds18x20",
-                    "ow": 1,
-                    "sensors_ids": [5]
-                }
-            ],
-            "switches": {
-                "heat": 33,
-                "vent_out": 32,
-                "vent_mix": 13
-            },
-            "sensors_roles": {
-                "temperature": [2,4,5],
-                "humidity": [3]
-            },
-            "sensors_titles": {
-                "2": "низ",
-                "3": "низ",
-                "4": "верх",
-                "5": "снаружи"
-            },
-            "limits": {
-                "temperature": [20, 0.1],
-                "humidity": [60, 10]
-            },
-            "sleep": 750
-        },
         "rtc": {
             "enabled": true,
             "i2c": 0
-        },
-        "relays": {
-            "enabled": false,
-            "button": null,
-            "relay": null,
-            "timers": []
         },
         "power_monitor": {
             "enabled": false

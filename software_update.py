@@ -109,8 +109,9 @@ def ensure_file_path(path):
     split_path = path.split('/')
     if len(split_path) > 1:
         for i, fragment in enumerate(split_path):
-            parent = '/'.join(split_path[:-i])
-            try:
-                uos.mkdir(parent)
-            except OSError:
-                pass
+            if i > 0:
+                parent = '/'.join(split_path[:i])
+                try:
+                    uos.mkdir(parent)
+                except OSError as exc:
+                    LOG.exc(exc, 'Error creating folder: %s' % parent)

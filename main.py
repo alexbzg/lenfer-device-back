@@ -96,26 +96,19 @@ async def timers(req, rsp):
 async def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
-        reset_flag = ((WLAN.conf['enable_ssid'] != req.json['enable_ssid']) or
-            (req.json['enable_ssid'] and
-                (WLAN.conf['ssid'] != req.json['ssid'] or
-                    WLAN.conf['key'] != req.json['key'])) or
-            ((not req.json['enable_ssid']) and
-                (WLAN.conf['name'] != req.json['name'] or
-                    WLAN.conf['ap_key'] != req.json['ap_key'])))
         WLAN.conf.update(req.json)
         WLAN.save_conf()
         if DEVICE:
             DEVICE.status["ssid_delay"] = True
-        if reset_flag:
-            uasyncio.get_event_loop().create_task(delayed_reset(5))
-        await send_json(rsp, {"reset": reset_flag})
+        uasyncio.get_event_loop().create_task(delayed_reset(5))
+        await send_json(rsp, {"reset": True})
     else:
         await send_json(rsp, WLAN.conf)
 
 async def delayed_reset(delay):
     await uasyncio.sleep(delay)
-    machine.reset()
+    WLAN.enable_ssid(True)
+    #machine.reset()
 
 @APP.route('/api/climate/data')
 async def get_data(req, rsp):
@@ -158,6 +151,10 @@ async def relay_api(req, rsp):
 @APP.route('/api/modules')
 async def get_modules(req, rsp):
     await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
+
+@APP.route('/api/device_hash')
+async def get_device_hash(req, rsp):
+    await send_json(rsp, DEVICE.id['hash'])
 
 DEVICE.start_async()
 gc.collect()

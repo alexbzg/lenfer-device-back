@@ -17,11 +17,18 @@ class WlanController:
             self.conf = load_json('wlan_default.json')
 
         self.mode = None
-        self.nic = network.WLAN(network.STA_IF)
-        self.nic.active(True)
+        self.nic = None
         self.host = '0.0.0.0'
+
+        self.connect()
+
+    def connect(self):
+        if self.nic:
+            self.nic.active(False)
         if self.conf['enable_ssid'] and self.conf['ssid']:
             try:
+                self.nic = network.WLAN(network.STA_IF)
+                self.nic.active(True)
                 self.nic.connect(self.conf['ssid'], self.conf['key'])
                 sleep(10)
                 self.host = self.nic.ifconfig()[0]

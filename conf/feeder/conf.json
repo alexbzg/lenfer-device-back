@@ -9,7 +9,8 @@
                 "pin": 22
             },
             "adc": 35,
-            "power_monitor": {
+            "power_monitor": false,
+            "_power_monitor": {
                 "i2c": 0,
                 "shunt_ohms": 0.1
             }

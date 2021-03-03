@@ -99,8 +99,8 @@ class LenferDevice:
     async def check_wlan_switch(self):
         while True:
             await uasyncio.sleep(5)
-            if self.status['wlan_switch'] and self._wlan.mode != network.AP_IF:
-                self._wlan.enable_ssid(False)
+            if self.status['wlan_switch']:
+                self._wlan.enable_ssid(not self._wlan.conf['enable_ssid'])
 
     async def delayed_ssid_switch(self):
         LOG.info("delayed wlan switch activated")
@@ -164,8 +164,14 @@ class LenferDevice:
         while True:
             self.WDT.feed()
             await self.blink(("status",), 1 if self._wlan.mode == network.AP_IF else 2, 100)
-            await uasyncio.sleep(5)
+            await uasyncio.sleep(2)
             gc.collect()
+
+    async def check_online(self):
+        while True:
+            await uasyncio.sleep(60)
+            if self._wlan.conf['enable_ssid'] and not self.online():
+                machine.reset()
 
     async def task_check_software_updates(self):
         while True:
@@ -270,11 +276,11 @@ class LenferDevice:
         return 'id' in self.id and self.id['id'] and self._wlan.online()
 
     def start_async(self):
-        self.WDT = WDT(timeout=20000)        
+        self.WDT = WDT(timeout=60000)        
         loop = uasyncio.get_event_loop()     
         loop.create_task(self.bg_leds())
         loop.create_task(self.check_wlan_switch())
-        if self._wlan.mode == network.AP_IF and self._wlan.conf['ssid'] and self._wlan.conf['enable_ssid']:
+        if self._wlan.mode == network.AP_IF and self._wlan.conf['ssid']:
             loop.create_task(self.delayed_ssid_switch())
         if self.modules['climate']:
             loop.create_task(self.modules['climate'].read())
