@@ -268,7 +268,7 @@ class LenferDevice:
             finally:
                 rsp.close()
                 rsp = None
-                self.status['srv_req_pending'] = False
+        self.status['srv_req_pending'] = False
         manage_memory()
         return result
 

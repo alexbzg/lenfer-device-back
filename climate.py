@@ -41,7 +41,8 @@ class SensorDeviceBME280(SensorDevice):
             temp = round((bme.read_temperature() / 100), 1)
             humid = int(bme.read_humidity() // 1024)
         except Exception as exc:
-            LOG.exc(exc, 'BME280 error')
+            pass
+            #LOG.exc(exc, 'BME280 error')
         finally:
             self._controller.data[self._sensors_ids[0]] = temp
             self._controller.data[self._sensors_ids[1]] = humid
