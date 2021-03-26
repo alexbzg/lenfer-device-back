@@ -1,0 +1,51 @@
+{
+    "modules": {
+        "climate": {
+            "enabled": true,
+            "sensor_devices": [
+                {
+                    "type": "bme280",
+                    "i2c": 0,
+                    "sensors_ids": [6, 7]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [8]
+                },                
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [9]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [10]
+                }
+            ],
+            "switches": false,
+            "limits": false,
+            "sensors_roles": false,
+            "sensors_titles": {
+                "1": "BME280",
+                "2": "BME280",
+                "3": "D1",
+                "4": "D2",
+                "5": "D3"
+            },
+            "sleep": 750
+        }
+    },
+    "sleep": 750,
+    "i2c": [{
+        "scl": 23,
+        "sda": 22
+    }],
+    "ow": [16, 17, 18],
+    "leds": {
+        "status": 32
+    },
+    "factory_reset": 27,
+    "wlan_switch": 33
+}

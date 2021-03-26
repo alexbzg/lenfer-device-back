@@ -1,4 +1,4 @@
-from machine import Pin, ADC
+from machine import Pin, ADC, reset, RTC
 import uasyncio
 import utime
 
@@ -21,6 +21,7 @@ class FeederController(RelaysController):
                                if conf['power_monitor'] else None)
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
+        self._reboot = None
         self._reverse_threshold = device.settings['reverse_threshold']
         self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
@@ -31,6 +32,26 @@ class FeederController(RelaysController):
                 button = Pin(pin, Pin.IN, Pin.PULL_UP)
                 reverse = bool(idx)
                 button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
+
+    def schedule_reboot(self):
+        prev_end = None
+        for timer in self.timers:
+            if prev_end and 10 < timer.on - prev_end:
+                self._reboot = prev_end + int((timer.on - prev_end) / 2)
+                break
+            else:
+                prev_end = timer.on + int(timer.duration / 60) + 1
+
+    async def check_timers(self):
+        while True:
+            time_tuple = RTC().datetime()
+            time = time_tuple[4]*3600 + time_tuple[5]*60
+            for timer in self.timers:
+                timer.check(time)
+            if time == self._reboot:
+                reset()
+            manage_memory()
+            await uasyncio.sleep(60)
 
     def on_button(self, pin, reverse=False):
         print('button {0} {1} {2}'.format(
@@ -119,10 +140,11 @@ class FeederController(RelaysController):
 
     def update_settings(self):
         RelaysController.update_settings(self)
+        self.schedule_reboot()
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:
-            self. _reverse_duration = self.device.settings['reverse_duration']
+            self._reverse_duration = self.device.settings['reverse_duration']
 
     @reverse.setter
     def reverse(self, value):
