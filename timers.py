@@ -62,13 +62,9 @@ class Timer:
     def off(self):
         self.on(False)
 
-    async def delayed_off(self):
-        await uasyncio.sleep(self.duration)
-        self.off()
-
     def on_off(self):
-        uasyncio.get_event_loop().create_task(self.delayed_off())
         self.on()
+        uasyncio.get_event_loop().call_later(self.duration, self.off)
 
     def check(self, time):
         if self.duration:

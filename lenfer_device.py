@@ -167,12 +167,6 @@ class LenferDevice:
             await uasyncio.sleep(2)
             gc.collect()
 
-    async def check_online(self):
-        while True:
-            await uasyncio.sleep(60)
-            if self._wlan.conf['enable_ssid'] and not self.online():
-                machine.reset()
-
     async def task_check_software_updates(self):
         while True:
             self.WDT.feed()
@@ -212,6 +206,13 @@ class LenferDevice:
                     data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                         for _id, value in ctrl.data.items()]
             await self.srv_post('sensors_data', data)
+            data = {'data': []}
+            tstamp = self.post_tstamp()
+            for ctrl in self.modules.values():
+                if ctrl and hasattr(ctrl, 'switches'):
+                    data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
+                        for switch in ctrl.switches.values() if switch]
+            await self.srv_post('switches_state', data)
 
     async def post_log(self, entries):
         LOG.info(entries)

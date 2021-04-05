@@ -1,4 +1,14 @@
 {
+    "wlan": {
+        "name": "Brooder",
+        "ap_key": "",
+        "address": "192.168.0.1",
+        "mask": "255.255.255.0",
+        "authmode": 4,
+        "ssid": "",
+        "key": "",
+        "enable_ssid": true
+    },
     "modules": {
         "climate": {
             "enabled": true,
@@ -6,46 +16,77 @@
                 {
                     "type": "bme280",
                     "i2c": 0,
-                    "sensors_ids": [6, 7]
+                    "sensors_ids": [2, 3]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [8]
-                },                
+                    "sensors_ids": [4]
+                },
                 {
                     "type": "ds18x20",
                     "ow": 1,
-                    "sensors_ids": [9]
+                    "sensors_ids": [5]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 2,
-                    "sensors_ids": [10]
+                    "sensors_ids": [6]
                 }
             ],
-            "switches": false,
-            "limits": false,
-            "sensors_roles": false,
+            "switches":  {
+                "heat": {
+                    "pin": 33,
+                    "id": 1
+                },
+                "vent_out": {
+                    "pin": 32,
+                    "id": 2
+                },                
+                "vent_mix": {
+                    "pin": 13,
+                    "id": 3
+                }
+            },
+            "sensors_roles": {
+                "temperature": [2,4,5],
+                "humidity": [3]
+            },
             "sensors_titles": {
-                "1": "BME280",
-                "2": "BME280",
-                "3": "D1",
-                "4": "D2",
-                "5": "D3"
+                "2": "низ",
+                "3": "низ",
+                "4": "верх",
+                "5": "снаружи"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": [60, 10]
             },
             "sleep": 750
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        },
+        "relays": {
+            "enabled": false,
+            "buttons": [],
+            "relays": [],
+            "timers": []
+        },
+        "power_monitor": {
+            "enabled": false
         }
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 23,
-        "sda": 22
+        "scl": 19,
+        "sda": 21
     }],
-    "ow": [16, 17, 18],
+    "ow": [23, 22, 26],
     "leds": {
-        "status": 32
+        "status": 25
     },
-    "factory_reset": 27,
-    "wlan_switch": 33
+    "factory_reset": 17,
+    "wlan_switch": 16
 }

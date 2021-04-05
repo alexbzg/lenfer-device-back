@@ -22,6 +22,7 @@ class FeederController(RelaysController):
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
         self._reboot = None
+        self.schedule_reboot()
         self._reverse_threshold = device.settings['reverse_threshold']
         self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
@@ -34,13 +35,15 @@ class FeederController(RelaysController):
                 button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
 
     def schedule_reboot(self):
-        prev_end = None
+        prev_end = 0
         for timer in self.timers:
-            if prev_end and 10 < timer.on - prev_end:
-                self._reboot = prev_end + int((timer.on - prev_end) / 2)
-                break
+            if 10 < timer.time_on - prev_end:
+                self._reboot = ((prev_end + int((timer.time_on - prev_end) / 2)) // 60) * 60
+                print('Scheduled reboot at {0}'.format(self._reboot))
+                return
             else:
-                prev_end = timer.on + int(timer.duration / 60) + 1
+                prev_end = timer.time_on + int(timer.duration / 60) + 1
+        print('reboot was not scheduled')
 
     async def check_timers(self):
         while True:

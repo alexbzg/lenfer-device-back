@@ -1,1 +1,8 @@
-{"id": 18, "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjE4fQ.Z_qIceCzc0I-Y41hvuEA62JNPulhTHE6J_DptIUKAiY", "hash": "MB9AB3", "updates": false, "type": "climate_info"}
+{
+    "id": 10, 
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjEwfQ.RIqNnf3SuwmBxccIMaUyTAaGB2YoqOwQAe-d-JGs4Io",
+    "hash": "3ybVy5",
+    "type": "climate",
+    "disable_software_updates": true,
+    "debug": true
+}
