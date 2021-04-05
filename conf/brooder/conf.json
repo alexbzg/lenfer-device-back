@@ -1,0 +1,92 @@
+{
+    "wlan": {
+        "name": "Brooder",
+        "ap_key": "",
+        "address": "192.168.0.1",
+        "mask": "255.255.255.0",
+        "authmode": 4,
+        "ssid": "",
+        "key": "",
+        "enable_ssid": true
+    },
+    "modules": {
+        "climate": {
+            "enabled": true,
+            "sensor_devices": [
+                {
+                    "type": "bme280",
+                    "i2c": 0,
+                    "sensors_ids": [1, 2]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [3]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [4]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 3,
+                    "sensors_ids": [5]
+                }
+            ],
+            "switches":  {
+                "heat": {
+                    "pin": 33,
+                    "id": 1
+                },
+                "vent_out": {
+                    "pin": 32,
+                    "id": 2
+                },                
+                "vent_mix": {
+                    "pin": 13,
+                    "id": 3
+                }
+            },
+            "sensors_roles": {
+                "temperature": [2,4,5],
+                "humidity": [3]
+            },
+            "sensors_titles": {
+                "2": "низ",
+                "3": "низ",
+                "4": "верх",
+                "5": "снаружи"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": [60, 10]
+            },
+            "sleep": 750
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        },
+        "relays": {
+            "enabled": false,
+            "buttons": [],
+            "relays": [],
+            "timers": []
+        },
+        "power_monitor": {
+            "enabled": false
+        }
+    },
+    "sleep": 750,
+    "i2c": [{
+        "scl": 19,
+        "sda": 21
+    }],
+    "ow": [23, 22],
+    "leds": {
+        "status": 25
+    },
+    "factory_reset": 17,
+    "wlan_switch": 16
+}
