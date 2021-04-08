@@ -4,5 +4,6 @@
     "hash": "3ybVy5",
     "type": "climate",
     "disable_software_updates": true,
+    "updates": true,
     "debug": true
 }

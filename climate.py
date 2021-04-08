@@ -137,7 +137,7 @@ class ClimateController(LenferController):
             await uasyncio.sleep_ms(self._sleep)
             for sensor_device in self.sensor_devices:
                 sensor_device.read()
-            if self._switches:
+            if self.switches:
                 self.adjust_switches()
             manage_memory()
 
@@ -157,18 +157,18 @@ class ClimateController(LenferController):
             if day_no >= len(self.schedule['items']):
                 day_no = len(self.schedule['items']) - 1
             day = self.schedule['items'][day_no]
-            temp_idx = self.schedule['params'].index('temperature')
-            temp_delta = float(day[temp_idx][1])
+            temp_idx = self.schedule['params_list'].index('temperature')
+            temp_delta = self.schedule['params']['delta'][temp_idx]
             temp_limits = [
-                float(day[temp_idx][0]) - temp_delta,
-                float(day[temp_idx][0]) + temp_delta,
+                day[temp_idx] - temp_delta,
+                day[temp_idx] + temp_delta,
             ]
 
-            humid_idx = self.schedule['params'].index('humidity')
-            humid_delta = float(day[humid_idx][1])
+            humid_idx = self.schedule['params_list'].index('humidity')
+            humid_delta = self.schedule['params']['delta'][humid_idx]
             humid_limits = [
-                float(day[humid_idx][0]) - humid_delta,
-                float(day[humid_idx][0]) + humid_delta,
+                day[humid_idx] - humid_delta,
+                day[humid_idx] + humid_delta,
             ]
 
         elif self.limits:

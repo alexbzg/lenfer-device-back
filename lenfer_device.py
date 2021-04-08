@@ -33,7 +33,8 @@ class LenferDevice:
         print('default settings loaded')
         self.save_settings()
 
-    def __init__(self, wlan): 
+    def __init__(self, wlan):
+        self.WDT = None
         self._schedule = None
         self._wlan = wlan
         self.status = {
@@ -122,7 +123,7 @@ class LenferDevice:
 
     async def factory_reset(self):
         LOG.info('factory reset is pending')
-        for co in range(50):
+        for _ in range(50):
             await uasyncio.sleep_ms(100)
             if self.status['factory_reset'] != 'pending':
                 LOG.info('factory reset is cancelled')
@@ -198,21 +199,23 @@ class LenferDevice:
 
     async def post_sensor_data(self):
         while True:
-            await uasyncio.sleep(60)
+            await uasyncio.sleep(58)
             data = {'data': []}
             tstamp = self.post_tstamp()
             for ctrl in self.modules.values():
                 if ctrl and hasattr(ctrl, 'data'):
                     data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                         for _id, value in ctrl.data.items()]
-            await self.srv_post('sensors_data', data)
+            if data['data']:
+                await self.srv_post('sensors_data', data)
             data = {'data': []}
             tstamp = self.post_tstamp()
             for ctrl in self.modules.values():
                 if ctrl and hasattr(ctrl, 'switches'):
                     data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
                         for switch in ctrl.switches.values() if switch]
-            await self.srv_post('switches_state', data)
+            if data['data']:
+                await self.srv_post('switches_state', data)
 
     async def post_log(self, entries):
         LOG.info(entries)

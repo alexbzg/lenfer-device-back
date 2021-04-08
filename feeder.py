@@ -1,4 +1,4 @@
-from machine import Pin, ADC, reset, RTC
+from machine import Pin, RTC
 import uasyncio
 import utime
 
@@ -9,7 +9,7 @@ from utils import manage_memory
 
 class FeederTimer(Timer):
 
-    def on_off(self):
+    def _on_off(self):
         uasyncio.get_event_loop().create_task(self.relay.run_for(self.duration))
 
 class FeederController(RelaysController):
@@ -21,8 +21,6 @@ class FeederController(RelaysController):
                                if conf['power_monitor'] else None)
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
-        self._reboot = None
-        self.schedule_reboot()
         self._reverse_threshold = device.settings['reverse_threshold']
         self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
@@ -34,25 +32,12 @@ class FeederController(RelaysController):
                 reverse = bool(idx)
                 button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
 
-    def schedule_reboot(self):
-        prev_end = 0
-        for timer in self.timers:
-            if 10 < timer.time_on - prev_end:
-                self._reboot = ((prev_end + int((timer.time_on - prev_end) / 2)) // 60) * 60
-                print('Scheduled reboot at {0}'.format(self._reboot))
-                return
-            else:
-                prev_end = timer.time_on + int(timer.duration / 60) + 1
-        print('reboot was not scheduled')
-
     async def check_timers(self):
         while True:
             time_tuple = RTC().datetime()
             time = time_tuple[4]*3600 + time_tuple[5]*60
             for timer in self.timers:
                 timer.check(time)
-            if time == self._reboot:
-                reset()
             manage_memory()
             await uasyncio.sleep(60)
 
@@ -143,7 +128,6 @@ class FeederController(RelaysController):
 
     def update_settings(self):
         RelaysController.update_settings(self)
-        self.schedule_reboot()
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:
