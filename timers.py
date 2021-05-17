@@ -42,6 +42,9 @@ def timer_minutes(entry):
 def timer_seconds(entry):
     return timer_minutes(entry)*60 + int(entry['sc'])
 
+def time_tuple_to_seconds(time_tuple):
+    return time_tuple[4]*3600 + time_tuple[5]*60
+
 class Timer:
 
     def __init__(self, conf, relay):

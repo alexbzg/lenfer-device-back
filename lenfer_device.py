@@ -45,7 +45,7 @@ class LenferDevice:
             "ssid_delay": False,
             "srv_req_pending": False
             }
-        self._log_queue = []
+        self.log_queue = []
         self._conf = load_json('conf.json')
         self.settings = load_json('settings.json')
         if not self.settings:
@@ -91,6 +91,20 @@ class LenferDevice:
         self.schedule = load_json('schedule.json')
         if not self.schedule:
             self.schedule = {'hash': None, 'start': None}
+
+    def append_log_entries(self, entries):
+        tstamp = self.post_tstamp()
+        if isinstance(entries, str):
+            entries = [entries,]
+        for idx, entry in enumerate(entries):
+            if isinstance(entry, str):
+                entries[idx] = {'txt': entry}
+            if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
+                entries[idx]['log_tstamp'] = tstamp
+        if self.online():
+            self.log_queue.extend(entries)
+        for entry in entries:
+            LOG.info(entry)
 
     def wlan_switch_irq(self, pin):
         if pin.value():
@@ -217,21 +231,12 @@ class LenferDevice:
             if data['data']:
                 await self.srv_post('switches_state', data)
 
-    async def post_log(self, entries):
-        LOG.info(entries)
-        if self.online():
-            tstamp = self.post_tstamp()
-            if isinstance(entries, str):
-                entries = [entries,]
-            for idx, entry in enumerate(entries):
-                if isinstance(entry, str):
-                    entries[idx] = {'txt': entry}
-                if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
-                    entries[idx]['log_tstamp'] = tstamp
-            self._log_queue.extend(entries)
-            if not self.status['srv_req_pending']:
-                await self.srv_post('devices_log/post', {'entries': self._log_queue})
-                self._log_queue = []
+    async def post_log(self):
+        while True:
+            await uasyncio.sleep(59)
+            if self.log_queue and not self.status['srv_req_pending']:
+                await self.srv_post('devices_log/post', {'entries': self.log_queue})
+                self.log_queue = []
                 manage_memory()
 
     @staticmethod
@@ -290,16 +295,19 @@ class LenferDevice:
             loop.create_task(self.modules['climate'].read())
             if self.online():
                 loop.create_task(self.post_sensor_data())
+            if self.modules['climate'].light:
+                loop.create_task(self.modules['climate'].adjust_light())                
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
         for relay_module in ('relays', 'feeder'):
             if self.modules[relay_module]:
                 loop.create_task(self.modules[relay_module].check_timers())
         if self.online():
+            loop.create_task(self.post_log())
             if 'updates' in self.id and self.id['updates']:
                 loop.create_task(self.check_updates())
             if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
                 loop.create_task(self.task_check_software_updates())
 
-        loop.create_task(self.post_log('device start'))
+        self.append_log_entries('device start')
 

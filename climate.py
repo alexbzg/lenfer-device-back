@@ -11,6 +11,7 @@ import ulogging
 import BME280
 from lenfer_controller import LenferController
 from utils import manage_memory
+from timers import time_tuple_to_seconds
 
 LOG = ulogging.getLogger("Climate")
 
@@ -92,9 +93,11 @@ class SensorDeviceDS18x20(SensorDevice):
 
 class ClimateController(LenferController):
 
-    def __init__(self, device, conf):        
+    def __init__(self, device, conf):
         LenferController.__init__(self, device)
         self.limits = device.settings['limits'] if 'limits' in device.settings else False
+        self.air_con_limits = None
+        self.set_air_con_limits()
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
         self._switches = conf['switches']
@@ -102,31 +105,32 @@ class ClimateController(LenferController):
         self._sleep = conf['sleep']
         self.data = {}
         self.sensor_devices = []
+        self.light = Pin(conf['light'], Pin.OUT) if 'light' in conf and conf['light'] else None
         if 'switches' in conf and conf['switches']:
             
-            self.switches['heat'] = {
-                'pin': Pin(conf['switches']['heat']['pin'], Pin.OUT),
-                'id': conf['switches']['heat']['id']
-            } if 'heat' in conf['switches'] and conf['switches']['heat'] else None
-            if self.switches['heat']:
-                self.switches['heat']['pin'].value(0)
-            self.switches['vent_out'] = {
-                'pin': Pin(conf['switches']['vent_out']['pin'], Pin.OUT),
-                'id': conf['switches']['vent_out']['id']
-            } if 'vent_out' in conf['switches'] and conf['switches']['vent_out'] else None
-            if self.switches['vent_out']:
-                self.switches['vent_out']['pin'].value(0)
-            self.switches['vent_mix'] = {
-                'pin': Pin(conf['switches']['vent_mix']['pin'], Pin.OUT),
-                'id': conf['switches']['vent_mix']['id']
-            } if 'vent_mix' in conf['switches'] and conf['switches']['vent_mix'] else None
-            if self.switches['vent_mix']:
-                self.switches['vent_mix']['pin'].value(0)
+            for switch_type in ('heat', 'vent_out', 'vent_mix', 'humid', 'air_con'):
+                if switch_type in conf['switches'] and conf['switches'][switch_type]:
+                    switch_conf = conf['switches'][switch_type]
+                    self.switches[switch_type] = {
+                        'pin': Pin(switch_conf['pin'], Pin.OUT),
+                        'id': switch_conf['id']
+                    }
+                    self.switches[switch_type]['pin'].value(0)
+                else:
+                    self.switches[switch_type] = None
+
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
-                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
+                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))  
+
+    def set_air_con_limits(self):
+        if 'air_con' in self.device.settings and self.device.settings['air_con']:
+            acs = self.device.settings['air_con']
+            self.air_con_limits = [acs[0] - acs[1], acs[0] + acs[1]]
+        else:
+            self.air_con_limits = None
 
     async def read(self):
 
@@ -141,13 +145,7 @@ class ClimateController(LenferController):
                 self.adjust_switches()
             manage_memory()
 
-    def adjust_switches(self):
-        temp = [
-            self.data[self.sensors_roles['temperature'][0]],
-            self.data[self.sensors_roles['temperature'][1]]
-            ]
-        humid = self.data[self.sensors_roles['humidity'][0]]
-        temp_limits, humid_limits = None, None
+    def get_schedule_day(self):
         if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
             day_no = 0
             start = utime.mktime(self.schedule['start'])
@@ -156,15 +154,51 @@ class ClimateController(LenferController):
                 day_no = int((today-start)/86400)
             if day_no >= len(self.schedule['items']):
                 day_no = len(self.schedule['items']) - 1
-            day = self.schedule['items'][day_no]
-            temp_idx = self.schedule['params_list'].index('temperature')
+            return self.schedule['items'][day_no]
+        else:
+            return None
+
+    async def adjust_light(self):
+        while True:
+            day = self.get_schedule_day()
+            if day:
+                on_idx = self.get_schedule_param_idx('light_on')
+                off_idx = self.get_schedule_param_idx('light_off')
+                on = day[on_idx] if on_idx and day[on_idx] else None
+                off = day[off_idx] if off_idx and day[off_idx] else None
+                now = time_tuple_to_seconds(machine.RTC().datetime())
+                if on and ((on <= now and not off) or (on <= now < off) or (off < on <= now)):
+                    if not self.light.value():
+                        print("Light on")
+                        self.light.value(1)
+                if off and ((off <= now and not on) or (off <= now < on) or (on < off <= now)):
+                    if self.light.value():
+                        print("Light off")
+                        self.light.value(0)
+            await uasyncio.sleep(59)
+
+    def get_schedule_param_idx(self, param):
+        return self.schedule['params_list'].index(param)
+        
+    def adjust_switches(self):
+        temp = [
+            self.data[self.sensors_roles['temperature'][0]],
+            self.data[self.sensors_roles['temperature'][1]]
+            ]
+        humid = self.data[self.sensors_roles['humidity'][0]]
+        temp_limits, humid_limits = None, None
+
+        day = self.get_schedule_day()
+
+        if day:
+            temp_idx = self.get_schedule_param_idx('temperature')
             temp_delta = self.schedule['params']['delta'][temp_idx]
             temp_limits = [
                 day[temp_idx] - temp_delta,
                 day[temp_idx] + temp_delta,
             ]
 
-            humid_idx = self.schedule['params_list'].index('humidity')
+            humid_idx = self.get_schedule_param_idx('humidity')
             humid_delta = self.schedule['params']['delta'][humid_idx]
             humid_limits = [
                 day[humid_idx] - humid_delta,
@@ -218,4 +252,23 @@ class ClimateController(LenferController):
                 if self.switches['vent_out']['pin'].value():
                     self.switches['vent_out']['pin'].value(0)
                     LOG.info('Out off')
+        if self.switches['humid']:
+            if (humid and humid_limits and humid_limits < humid_limits[0]):
+                if not self.switches['humid']['pin'].value():
+                    self.switches['humid']['pin'].value(1)
+                    LOG.info('Humid on')
+            else:
+                if self.switches['humid']['pin'].value():
+                    self.switches['humid']['pin'].value(0)
+                    LOG.info('Humid off')
+        if self.switches['air_con'] and self.air_con_limits:
+            if temp[0] and temp[0] > self.air_con_limits[1]:
+                if not self.switches['air_con']['pin'].value():
+                    self.switches['air_con']['pin'].value(1)
+                    LOG.info('Air con on')
+            elif not temp[0] or temp[0] < self.air_con_limits[0]:
+                if self.switches['air_con']['pin'].value():
+                    self.switches['air_con']['pin'].value(0)
+                    LOG.info('Air con off')       
+
         gc.collect()

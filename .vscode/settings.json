@@ -26,5 +26,8 @@
             "command": "extension.execute",
             "priority": 4
         }
+    ],
+    "python.analysis.extraPaths": [
+        "c:/Users/alexander/.vscode/extensions/rt-thread.rt-thread-micropython-1.0.7/microExamples/code-completion"
     ]
 }

@@ -1,14 +1,4 @@
 {
-    "wlan": {
-        "name": "Brooder",
-        "ap_key": "",
-        "address": "192.168.0.1",
-        "mask": "255.255.255.0",
-        "authmode": 4,
-        "ssid": "",
-        "key": "",
-        "enable_ssid": true
-    },
     "modules": {
         "climate": {
             "enabled": true,
@@ -16,22 +6,22 @@
                 {
                     "type": "bme280",
                     "i2c": 0,
-                    "sensors_ids": [1, 2]
+                    "sensors_ids": [2, 3]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [3]
-                },
-                {
-                    "type": "ds18x20",
-                    "ow": 1,
                     "sensors_ids": [4]
                 },
                 {
                     "type": "ds18x20",
-                    "ow": 3,
+                    "ow": 1,
                     "sensors_ids": [5]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [6]
                 }
             ],
             "switches":  {
@@ -48,6 +38,7 @@
                     "id": 3
                 }
             },
+            "light": 27,
             "sensors_roles": {
                 "temperature": [2,4,5],
                 "humidity": [3]
@@ -67,15 +58,6 @@
         "rtc": {
             "enabled": true,
             "i2c": 0
-        },
-        "relays": {
-            "enabled": false,
-            "buttons": [],
-            "relays": [],
-            "timers": []
-        },
-        "power_monitor": {
-            "enabled": false
         }
     },
     "sleep": 750,
@@ -83,7 +65,7 @@
         "scl": 19,
         "sda": 21
     }],
-    "ow": [23, 22],
+    "ow": [23, 22, 26],
     "leds": {
         "status": 25
     },
