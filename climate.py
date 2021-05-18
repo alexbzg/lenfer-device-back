@@ -97,7 +97,6 @@ class ClimateController(LenferController):
         LenferController.__init__(self, device)
         self.limits = device.settings['limits'] if 'limits' in device.settings else False
         self.air_con_limits = None
-        self.set_air_con_limits()
         self.sensors_roles = conf['sensors_roles']
         self.sensors_titles = conf['sensors_titles']
         self._switches = conf['switches']
@@ -119,13 +118,15 @@ class ClimateController(LenferController):
                 else:
                     self.switches[switch_type] = None
 
+        self.update_settings()
+
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))  
 
-    def set_air_con_limits(self):
+    def update_settings(self):
         if 'air_con' in self.device.settings and self.device.settings['air_con']:
             acs = self.device.settings['air_con']
             self.air_con_limits = [acs[0] - acs[1], acs[0] + acs[1]]
