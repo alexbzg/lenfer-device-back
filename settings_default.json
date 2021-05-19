@@ -1,5 +1,3 @@
 {
-    "reverse_threshold": 2.5,
-    "reverse_duration": 5,
-    "timers": []
+    "air_con": false
 }

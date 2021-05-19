@@ -5,5 +5,5 @@
     "type": "climate",
     "disable_software_updates": true,
     "updates": true,
-    "debug": false
+    "debug": true
 }

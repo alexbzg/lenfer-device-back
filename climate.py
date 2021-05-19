@@ -254,7 +254,7 @@ class ClimateController(LenferController):
                     self.switches['vent_out']['pin'].value(0)
                     LOG.info('Out off')
         if self.switches['humid']:
-            if (humid and humid_limits and humid_limits < humid_limits[0]):
+            if (humid and humid_limits and humid < humid_limits[0]):
                 if not self.switches['humid']['pin'].value():
                     self.switches['humid']['pin'].value(1)
                     LOG.info('Humid on')

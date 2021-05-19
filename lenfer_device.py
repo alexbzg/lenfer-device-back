@@ -52,7 +52,7 @@ class LenferDevice:
             self.load_def_settings()
 
         wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
-        wlan_switch_button.irq(self.wlan_switch_irq)
+        wlan_switch_button.irq(self.wlan_switch_irq, Pin.IRQ_FALLING)
 
         if 'factory_reset' in self._conf and self._conf['factory_reset']:
             factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
@@ -107,7 +107,7 @@ class LenferDevice:
             LOG.info(entry)
 
     def wlan_switch_irq(self, pin):
-        if pin.value():
+        if not pin.value():
             LOG.info('wlan switch was activated')
             self.status['wlan_switch'] = 'true'
 
