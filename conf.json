@@ -21,7 +21,7 @@
                 {
                     "type": "ds18x20",
                     "ow": 2,
-                    "sensors_ids": [6]
+                    "sensors_ids": [12]
                 },
                 {
                     "type": "ccs811",

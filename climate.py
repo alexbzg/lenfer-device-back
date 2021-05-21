@@ -118,20 +118,11 @@ class ClimateController(LenferController):
                 else:
                     self.switches[switch_type] = None
 
-        self.update_settings()
-
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))  
-
-    def update_settings(self):
-        if 'air_con' in self.device.settings and self.device.settings['air_con']:
-            acs = self.device.settings['air_con']
-            self.air_con_limits = [acs[0] - acs[1], acs[0] + acs[1]]
-        else:
-            self.air_con_limits = None
 
     async def read(self):
 
@@ -262,14 +253,16 @@ class ClimateController(LenferController):
                 if self.switches['humid']['pin'].value():
                     self.switches['humid']['pin'].value(0)
                     LOG.info('Humid off')
-        if self.switches['air_con'] and self.air_con_limits:
-            if temp[0] and temp[0] > self.air_con_limits[1]:
+        if self.switches['air_con']:
+            if temp[0] and temp_limits and temp[0] > temp_limits[1] + 3:
                 if not self.switches['air_con']['pin'].value():
                     self.switches['air_con']['pin'].value(1)
                     LOG.info('Air con on')
-            elif not temp[0] or temp[0] < self.air_con_limits[0]:
+                    if self.switches['vent_out'] and self.switches['vent_out']['pin'].value():
+                        self.switches['vent_out'].off()
+            else:
                 if self.switches['air_con']['pin'].value():
-                    self.switches['air_con']['pin'].value(0)
+                    self.switches['air_con']['pin'].off()
                     LOG.info('Air con off')       
 
         gc.collect()
