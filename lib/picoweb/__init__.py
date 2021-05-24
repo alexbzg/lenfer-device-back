@@ -1,5 +1,5 @@
-# Picoweb web pico-framework for Pycopy, https://github.com/pfalcon/pycopy
-# Copyright (c) 2014-2020 Paul Sokolovsky
+# Picoweb web pico-framework for MicroPython
+# Copyright (c) 2014-2018 Paul Sokolovsky
 # SPDX-License-Identifier: MIT
 import sys
 import gc
@@ -10,11 +10,8 @@ import ure as re
 import uerrno
 import uasyncio as asyncio
 import pkg_resources
-import ujson
 
 from .utils import parse_qs
-
-SEND_BUFSZ = 128
 
 
 def get_mime_type(fname):
@@ -29,7 +26,7 @@ def get_mime_type(fname):
     return "text/plain"
 
 def sendstream(writer, f):
-    buf = bytearray(SEND_BUFSZ)
+    buf = bytearray(64)
     while True:
         l = f.readinto(buf)
         if not l:
@@ -42,7 +39,7 @@ def jsonify(writer, dict):
     yield from start_response(writer, "application/json")
     yield from writer.awrite(ujson.dumps(dict))
 
-def start_response(writer, content_type="text/html; charset=utf-8", status="200", headers=None):
+def start_response(writer, content_type="text/html", status="200", headers=None):
     yield from writer.awrite("HTTP/1.0 %s NA\r\n" % status)
     yield from writer.awrite("Content-Type: ")
     yield from writer.awrite(content_type)
@@ -71,15 +68,10 @@ class HTTPRequest:
         pass
 
     def read_form_data(self):
-        size = int(self.headers["content-length"])
-        data = yield from self.reader.readexactly(size)
+        size = int(self.headers[b"Content-Length"])
+        data = yield from self.reader.read(size)
         form = parse_qs(data.decode())
         self.form = form
-
-    def read_json(self):
-        size = int(self.headers["content-length"])
-        data = yield from self.reader.readexactly(size)
-        self.json = ujson.loads(data.decode())
 
     def parse_qs(self):
         form = parse_qs(self.qs)
@@ -112,7 +104,7 @@ class WebApp:
             if l == b"\r\n":
                 break
             k, v = l.split(b":", 1)
-            headers[k.decode('utf-8').lower()] = v.strip()
+            headers[k] = v.strip()
         return headers
 
     def _handle(self, reader, writer):
@@ -217,22 +209,11 @@ class WebApp:
         except Exception as e:
             if self.debug >= 0:
                 self.log.exc(e, "%.3f %s %s %r" % (utime.time(), req, writer, e))
-            yield from self.handle_exc(req, writer, e)
 
         if close is not False:
             yield from writer.aclose()
         if __debug__ and self.debug > 1:
             self.log.debug("%.3f %s Finished processing request", utime.time(), req)
-
-    def handle_exc(self, req, resp, e):
-        # Can be overriden by subclasses. req may be not (fully) initialized.
-        # resp may already have (partial) content written.
-        # NOTE: It's your responsibility to not throw exceptions out of
-        # handle_exc(). If exception is thrown, it will be propagated, and
-        # your webapp will terminate.
-        # This method is a coroutine.
-        return
-        yield
 
     def mount(self, url, app):
         "Mount a sub-app at the url of current app."
@@ -244,9 +225,6 @@ class WebApp:
         # app, Bottle's way was followed.
         app.url = url
         self.mounts.append(app)
-        # TODO: Consider instead to do better subapp prefix matching
-        # in _handle() above.
-        self.mounts.sort(key=lambda app: len(app.url), reverse=True)
 
     def route(self, url, **kwargs):
         def _route(f):
@@ -268,7 +246,7 @@ class WebApp:
     def render_template(self, writer, tmpl_name, args=()):
         tmpl = self._load_template(tmpl_name)
         for s in tmpl(*args):
-            yield from writer.awritestr(s)
+            yield from writer.awrite(s)
 
     def render_str(self, tmpl_name, args=()):
         #TODO: bloat
@@ -301,14 +279,6 @@ class WebApp:
         This is good place to connect to/initialize a database, for example."""
         self.inited = True
 
-    def serve(self, loop, host, port):
-        # Actually serve client connections. Subclasses may override this
-        # to e.g. catch and handle exceptions when dealing with server socket
-        # (which are otherwise unhandled and will terminate a Picoweb app).
-        # Note: name and signature of this method may change.
-        loop.create_task(asyncio.start_server(self._handle, host, port))
-        loop.run_forever()
-
     def run(self, host="127.0.0.1", port=8081, debug=False, lazy_init=False, log=None):
         if log is None and debug >= 0:
             import ulogging
@@ -325,5 +295,6 @@ class WebApp:
         loop = asyncio.get_event_loop()
         if debug > 0:
             print("* Running on http://%s:%s/" % (host, port))
-        self.serve(loop, host, port)
+        loop.create_task(asyncio.start_server(self._handle, host, port))
+        loop.run_forever()
         loop.close()

@@ -21,33 +21,49 @@
                 {
                     "type": "ds18x20",
                     "ow": 2,
-                    "sensors_ids": [6]
+                    "sensors_ids": [12]
+                },
+                {
+                    "type": "ccs811",
+                    "i2c": 0,
+                    "sensors_ids": [7]
                 }
             ],
             "switches":  {
                 "heat": {
-                    "pin": 33,
+                    "pin": 32,
                     "id": 1
                 },
                 "vent_out": {
-                    "pin": 32,
+                    "pin": 26,
                     "id": 2
                 },                
                 "vent_mix": {
-                    "pin": 13,
+                    "pin": 25,
                     "id": 3
+                },                
+                "humid": {
+                    "pin": 27,
+                    "id": 4
+                },                
+                "air_con": {
+                    "pin": 13,
+                    "id": 5
                 }
             },
-            "light": 27,
+            "light": 33,
             "sensors_roles": {
-                "temperature": [2,4,5],
-                "humidity": [3]
+                "temperature": [2,4,5,6],
+                "humidity": [3],
+                "co2": [7]
             },
             "sensors_titles": {
                 "2": "низ",
                 "3": "низ",
                 "4": "верх",
-                "5": "снаружи"
+                "5": "снаружи",
+                "6": "",
+                "7": "co2"
             },
             "limits": {
                 "temperature": [20, 0.1],
@@ -62,13 +78,13 @@
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 19,
-        "sda": 21
+        "scl": 23,
+        "sda": 22
     }],
-    "ow": [23, 22, 26],
+    "ow": [18, 19, 21],
     "leds": {
-        "status": 25
+        "status": 16
     },
     "factory_reset": 17,
-    "wlan_switch": 16
+    "wlan_switch": 36
 }

@@ -1,4 +1,3 @@
-# (c) 2014-2018 Paul Sokolovsky. MIT license.
 import utime as time
 import utimeq
 import ucollections
@@ -13,8 +12,8 @@ def set_debug(val):
     global DEBUG, log
     DEBUG = val
     if val:
-        import ulogging
-        log = ulogging.getLogger("uasyncio.core")
+        import logging
+        log = logging.getLogger("uasyncio.core")
 
 
 class CancelledError(Exception):
@@ -61,9 +60,7 @@ class EventLoop:
     def call_at_(self, time, callback, args=()):
         if __debug__ and DEBUG:
             log.debug("Scheduling in waitq: %s", (time, callback, args))
-        id = self.waitq.push(time, callback, args)
-        if isinstance(callback, type_gen):
-            prev = callback.pend_throw(id)
+        self.waitq.push(time, callback, args)
 
     def wait(self, delay):
         # Default wait implementation, to be overriden in subclasses
@@ -83,10 +80,6 @@ class EventLoop:
                 if delay > 0:
                     break
                 self.waitq.pop(cur_task)
-
-                if isinstance(cur_task[1], type_gen):
-                    prev = cur_task[1].pend_throw(None)
-
                 if __debug__ and DEBUG:
                     log.debug("Moving from waitq to runq: %s", cur_task[1])
                 self.call_soon(cur_task[1], *cur_task[2])
@@ -123,13 +116,11 @@ class EventLoop:
                         if isinstance(ret, SleepMs):
                             delay = arg
                         elif isinstance(ret, IORead):
-                            # Store stream object so we can call cancel_io()
-                            # for it in case of cancellation.
-                            cb.pend_throw(arg)
+                            cb.pend_throw(False)
                             self.add_reader(arg, cb)
                             continue
                         elif isinstance(ret, IOWrite):
-                            cb.pend_throw(arg)
+                            cb.pend_throw(False)
                             self.add_writer(arg, cb)
                             continue
                         elif isinstance(ret, IOReadDone):
@@ -268,15 +259,7 @@ sleep_ms = SleepMs()
 
 def cancel(coro):
     prev = coro.pend_throw(CancelledError())
-    if prev is None:
-        pass
-    elif isinstance(prev, int):
-        # utimeq id
-        _event_loop.waitq.remove(prev)
-        _event_loop.call_soon(coro)
-    else:
-        # stream obj
-        _event_loop.cancel_io(prev)
+    if prev is False:
         _event_loop.call_soon(coro)
 
 
@@ -300,13 +283,7 @@ def wait_for_ms(coro, timeout):
                 log.debug("timeout_func: cancelling %s", timeout_obj.coro)
             prev = timeout_obj.coro.pend_throw(TimeoutError())
             #print("prev pend", prev)
-            if prev is None:
-                pass
-            elif isinstance(prev, int):
-                _event_loop.waitq.remove(prev)
-                _event_loop.call_soon(timeout_obj.coro)
-            else:
-                _event_loop.cancel_io(prev)
+            if prev is False:
                 _event_loop.call_soon(timeout_obj.coro)
 
     timeout_obj = TimeoutObj(_event_loop.cur_task)

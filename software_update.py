@@ -10,7 +10,7 @@ from utils import load_json, save_json, manage_memory
 
 LOG = ulogging.getLogger("Main")
 
-UPDATES_SERVER_URL = 'http://my.lenfer.ru/device/'
+UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
 
 def updates_url():

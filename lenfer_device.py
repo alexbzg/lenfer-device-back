@@ -1,11 +1,12 @@
 import gc
 import micropython
+import uerrno
 #from time import sleep
 
 import uasyncio
 import network
 import machine
-from machine import WDT, Pin, I2C
+from machine import WDT, Pin, SoftI2C
 import ujson
 import ulogging
 
@@ -43,7 +44,8 @@ class LenferDevice:
             "wlan_switch": False,
             "ssid_failure": False,
             "ssid_delay": False,
-            "srv_req_pending": False
+            "srv_req_pending": False,
+            "srv_unreach_count": 0
             }
         self.log_queue = []
         self._conf = load_json('conf.json')
@@ -52,14 +54,14 @@ class LenferDevice:
             self.load_def_settings()
 
         wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
-        wlan_switch_button.irq(self.wlan_switch_irq, Pin.IRQ_FALLING)
+        wlan_switch_button.irq(self.wlan_switch_irq)
 
         if 'factory_reset' in self._conf and self._conf['factory_reset']:
             factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
             factory_reset_button.irq(self.factory_reset_irq)
 
         self.modules = {item: None for item in LenferDevice.MODULES_LIST}
-        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
+        self.i2c = [SoftI2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
             for i2c_conf in self._conf['i2c']]
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self._conf['leds'].items()}
         self.id = load_json('id.json')
@@ -182,6 +184,7 @@ class LenferDevice:
             await uasyncio.sleep(2)
             gc.collect()
 
+
     async def task_check_software_updates(self):
         while True:
             self.WDT.feed()
@@ -192,52 +195,64 @@ class LenferDevice:
 
     async def check_updates(self):
         while True:
-            data = {
-                'schedule': {
-                    'hash': self.schedule['hash'],
-                    'start': self.schedule['start']
-                },
-                'props': self.settings
-            }
-            updates = await self.srv_post('device_updates', data)
-            if updates:
-                if 'schedule' in updates and updates['schedule']:
-                    self.schedule = updates['schedule']
-                if 'props' in updates and updates['props']:
-                    self.settings = updates['props']
-                    self.save_settings()
-                    for ctrl in self.modules.values():
-                        if ctrl:
-                            ctrl.update_settings()
+            try:
+                data = {
+                    'schedule': {
+                        'hash': self.schedule['hash'],
+                        'start': self.schedule['start']
+                    },
+                    'props': self.settings
+                }
+                updates = await self.srv_post('device_updates', data)
+                if updates:
+                    if 'schedule' in updates and updates['schedule']:
+                        self.schedule = updates['schedule']
+                    if 'props' in updates and updates['props']:
+                        self.settings = updates['props']
+                        self.save_settings()
+                        for ctrl in self.modules.values():
+                            if ctrl:
+                                ctrl.update_settings()
+            except Exception as exc:
+                LOG.exc(exc, 'Server updates check error')
+            manage_memory()
             await uasyncio.sleep(30)
 
     async def post_sensor_data(self):
         while True:
             await uasyncio.sleep(58)
-            data = {'data': []}
-            tstamp = self.post_tstamp()
-            for ctrl in self.modules.values():
-                if ctrl and hasattr(ctrl, 'data'):
-                    data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
-                        for _id, value in ctrl.data.items()]
-            if data['data']:
-                await self.srv_post('sensors_data', data)
-            data = {'data': []}
-            tstamp = self.post_tstamp()
-            for ctrl in self.modules.values():
-                if ctrl and hasattr(ctrl, 'switches'):
-                    data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
-                        for switch in ctrl.switches.values() if switch]
-            if data['data']:
-                await self.srv_post('switches_state', data)
+            try:
+                data = {'data': []}
+                tstamp = self.post_tstamp()
+                for ctrl in self.modules.values():
+                    if ctrl and hasattr(ctrl, 'data'):
+                        data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
+                            for _id, value in ctrl.data.items()]
+                if data['data']:
+                    await self.srv_post('sensors_data', data)
+                data = {'data': []}
+                tstamp = self.post_tstamp()
+                for ctrl in self.modules.values():
+                    if ctrl and hasattr(ctrl, 'switches'):
+                        data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
+                            for switch in ctrl.switches.values() if switch]
+                if data['data']:
+                    await self.srv_post('switches_state', data)
+            except Exception as exc:
+                LOG.exc(exc, 'Server sensors data post error')
+            manage_memory()
 
     async def post_log(self):
         while True:
             await uasyncio.sleep(59)
-            if self.log_queue and not self.status['srv_req_pending']:
-                await self.srv_post('devices_log/post', {'entries': self.log_queue})
-                self.log_queue = []
-                manage_memory()
+            try:
+                if self.log_queue and not self.status['srv_req_pending']:
+                    await self.srv_post('devices_log/post', {'entries': self.log_queue})
+                    self.log_queue = []
+            except Exception as exc:
+                LOG.exc(exc, 'Server log post error')
+            manage_memory()
+
 
     @staticmethod
     def post_tstamp(time_tuple=None):
@@ -259,6 +274,15 @@ class LenferDevice:
             rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
+        except OSError as exc:
+            LOG.exc(exc, 'Data posting error')
+            LOG.error("URL: %s", self.server_uri + url)
+            LOG.error("data: %s", data)
+            if exc.errno == uerrno.EHOSTUNREACH:
+                self.status['srv_unreach_count'] += 1
+                LOG.error("server unreachable count: %s", self.status['srv_unreach_count'])
+                if self.status['srv_unreach_count'] > 2:
+                    machine.reset()
         except Exception as exc:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", self.server_uri + url)
@@ -266,6 +290,7 @@ class LenferDevice:
         finally:
             if hasattr(self, 'WDT'):
                 self.WDT.feed()
+            self.status['srv_req_pending'] = False
         if rsp:
             if raw:
                 return rsp.raw
@@ -277,7 +302,6 @@ class LenferDevice:
             finally:
                 rsp.close()
                 rsp = None
-        self.status['srv_req_pending'] = False
         manage_memory()
         return result
 
