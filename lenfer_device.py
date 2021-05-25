@@ -278,11 +278,10 @@ class LenferDevice:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", self.server_uri + url)
             LOG.error("data: %s", data)
-            if exc.errno == uerrno.EHOSTUNREACH:
-                self.status['srv_unreach_count'] += 1
-                LOG.error("server unreachable count: %s", self.status['srv_unreach_count'])
-                if self.status['srv_unreach_count'] > 2:
-                    machine.reset()
+            self.status['srv_unreach_count'] += 1
+            LOG.error("server unreachable count: %s", self.status['srv_unreach_count'])
+            if self.status['srv_unreach_count'] > 2:
+                machine.reset()
         except Exception as exc:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", self.server_uri + url)

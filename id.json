@@ -2,7 +2,7 @@
     "id": 10, 
     "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjEwfQ.RIqNnf3SuwmBxccIMaUyTAaGB2YoqOwQAe-d-JGs4Io",
     "hash": "3ybVy5",
-    "type": "climate",
+    "type": "brooder",
     "disable_software_updates": true,
     "updates": true,
     "debug": true

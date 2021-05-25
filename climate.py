@@ -9,6 +9,7 @@ import uasyncio
 import ulogging
 
 import BME280
+from CCS811 import CCS811
 from lenfer_controller import LenferController
 from utils import manage_memory
 from timers import time_tuple_to_seconds
@@ -47,7 +48,29 @@ class SensorDeviceBME280(SensorDevice):
         finally:
             self._controller.data[self._sensors_ids[0]] = temp
             self._controller.data[self._sensors_ids[1]] = humid
-        
+
+class SensorDeviceCCS811(SensorDevice):
+    "CCS811 sensor handler"
+
+    def __init__(self, conf, controller, i2c_list):
+        SensorDevice.__init__(self, conf, controller)
+        self._ccs811 = CCS811(i2c_list[conf['i2c']])
+
+    def read(self):
+        "reads sensors data and stores in into controller data field"
+        co2 = None
+        try:
+            if self._ccs811.data_ready():
+                co2 = self._ccs811.eCO2
+            temp = self._controller.data[self._controller.sensors_roles['temperature'][0]]
+            humid = self._controller.data[self._controller.sensors_roles['humidity'][0]]
+            if temp != None and humid != None:
+                self._ccs811.put_envdata(humid, temp)
+        except Exception as exc:
+            pass
+            #LOG.exc(exc, 'BME280 error')
+        finally:
+            self._controller.data[self._sensors_ids[0]] = co2
 
 class SensorDeviceDS18x20(SensorDevice):
     "ds18x20 sensor handler"
@@ -121,6 +144,8 @@ class ClimateController(LenferController):
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
+            elif sensor_device_conf['type'] == 'ccs811':
+                self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))  
 
