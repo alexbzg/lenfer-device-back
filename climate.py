@@ -135,11 +135,14 @@ class ClimateController(LenferController):
                     switch_conf = conf['switches'][switch_type]
                     self.switches[switch_type] = {
                         'pin': Pin(switch_conf['pin'], Pin.OUT),
-                        'id': switch_conf['id']
+                        'id': switch_conf['id'],
+                        'enabled': True
                     }
                     self.switches[switch_type]['pin'].value(0)
                 else:
-                    self.switches[switch_type] = None
+                    self.switches[switch_type] = {'enabled': False}
+
+        self.update_settings()
 
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
@@ -147,7 +150,14 @@ class ClimateController(LenferController):
             elif sensor_device_conf['type'] == 'ccs811':
                 self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
-                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))  
+                self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
+
+    def update_settings(self):
+        if 'switches' in self.device.settings and self.device.settings['switches']:
+            for switch_id, enabled in self.device.settings['switches'].items():
+                switch_filter = [item for item in self.switches.values() if item['id'] == switch_id]
+                if switch_filter:
+                    switch_filter[0]['enabled'] = enabled
 
     async def read(self):
 
@@ -234,7 +244,7 @@ class ClimateController(LenferController):
             ]
 
         if temp[0]:
-            if self.switches['heat'] and temp_limits:
+            if self.switches['heat']['enabled'] and temp_limits:
                 if temp[0] < temp_limits[0]:
                     if not self.switches['heat']['pin'].value():
                         self.switches['heat']['pin'].value(1)
@@ -243,7 +253,7 @@ class ClimateController(LenferController):
                     if self.switches['heat']['pin'].value():
                         self.switches['heat']['pin'].value(0)
                         LOG.info('Heat off')
-            if self.switches['vent_mix']:
+            if self.switches['vent_mix']['enabled']:
                 if temp[1]:
                     if temp[0] > temp[1] + 3 or temp[0] < temp[1] - 3:
                         if not self.switches['vent_mix']['pin'].value():
@@ -253,12 +263,12 @@ class ClimateController(LenferController):
                         if self.switches['vent_mix']['pin'].value():
                             self.switches['vent_mix']['pin'].value(0)
                             LOG.info('Mix off') 
-        if self.switches['vent_mix']:
+        if self.switches['vent_mix']['enabled']:
             if not temp[0] or not temp[1]:
                 if self.switches['vent_mix']['pin'].value():
                     self.switches['vent_mix']['pin'].value(0)
                     LOG.info('Mix off')
-        if self.switches['vent_out']:
+        if self.switches['vent_out']['enabled']:
             if (humid and humid_limits and humid > humid_limits[1]) or\
                 (temp[0] and temp_limits and temp[0] > temp_limits[1]):
                 if not self.switches['vent_out']['pin'].value():
@@ -269,7 +279,7 @@ class ClimateController(LenferController):
                 if self.switches['vent_out']['pin'].value():
                     self.switches['vent_out']['pin'].value(0)
                     LOG.info('Out off')
-        if self.switches['humid']:
+        if self.switches['humid']['enabled']:
             if (humid and humid_limits and humid < humid_limits[0]):
                 if not self.switches['humid']['pin'].value():
                     self.switches['humid']['pin'].value(1)
@@ -278,12 +288,12 @@ class ClimateController(LenferController):
                 if self.switches['humid']['pin'].value():
                     self.switches['humid']['pin'].value(0)
                     LOG.info('Humid off')
-        if self.switches['air_con']:
+        if self.switches['air_con']['enabled']:
             if temp[0] and temp_limits and temp[0] > temp_limits[1] + 3:
                 if not self.switches['air_con']['pin'].value():
                     self.switches['air_con']['pin'].value(1)
                     LOG.info('Air con on')
-                    if self.switches['vent_out'] and self.switches['vent_out']['pin'].value():
+                    if self.switches['vent_out']['enabled'] and self.switches['vent_out']['pin'].value():
                         self.switches['vent_out'].off()
             else:
                 if self.switches['air_con']['pin'].value():
