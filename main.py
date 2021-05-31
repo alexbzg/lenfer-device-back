@@ -40,8 +40,8 @@ async def limits(req, rsp):
     ctrl = DEVICE.modules['climate']
     if ctrl:
         if req.method == "POST":
-            await req.read_json()
-            ctrl.limits.update(req.json)
+            req_json = req.read_json()
+            ctrl.limits.update(req_json)
             DEVICE.save_settings()
         await send_json(rsp, ctrl.limits)
 
@@ -77,19 +77,19 @@ async def get_sensors_data(req, rsp):
 async def timers(req, rsp):
     ctrl = get_ctrl(req)
     if ctrl:
-        if req.method == 'POST':
-            await req.read_json()
-            for key in req.json.keys():
-                timer_conf = req.json[key]
-                if key == '-1':
-                    ctrl.add_timer(timer_conf)
-                else:
-                    ctrl.update_timer(int(key), timer_conf)
-            DEVICE.save_settings()
-        elif req.method == 'DELETE':
-            await req.read_json()
-            ctrl.delete_timer(req.json)
-            DEVICE.save_settings()
+        if req.method == 'POST' or req.method == 'DELETE':
+            req_json = req.json()
+            if req.method == 'POST':
+                for key in req_json.keys():
+                    timer_conf = req_json[key]
+                    if key == '-1':
+                        ctrl.add_timer(timer_conf)
+                    else:
+                        ctrl.update_timer(int(key), timer_conf)
+                DEVICE.save_settings()
+            else:
+                ctrl.delete_timer(req_json)
+                DEVICE.save_settings()
         await send_json(rsp, DEVICE.settings['timers'])
 
 @APP.route('/api/settings/wlan')
@@ -137,11 +137,11 @@ async def relay_api(req, rsp):
     ctrl = get_ctrl(req)
     if ctrl:
         if req.method == 'POST':
-            await req.read_json()
-            if 'reverse' in req.json and hasattr(ctrl, 'reverse'):
-                ctrl.reverse = req.json['reverse']
-            ctrl.on(value=req.json['value'], source='manual')
-            if not req.json['value'] and hasattr(ctrl, 'reverse') and ctrl.reverse:
+            req_json = req.json()
+            if 'reverse' in req_json and hasattr(ctrl, 'reverse'):
+                ctrl.reverse = req_json['reverse']
+            ctrl.on(value=req_json['value'], source='manual')
+            if not req_json['value'] and hasattr(ctrl, 'reverse') and ctrl.reverse:
                 ctrl.reverse = False
             await send_json(rsp, 'OK')
         else:

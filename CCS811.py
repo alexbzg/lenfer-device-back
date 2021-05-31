@@ -41,7 +41,7 @@ class CCS811(object):
         self.i2c.writeto_mem(self.addr, 0x01, bytearray([0b00011000]))
 
     def __string__(self):
-        return 'eCO2: %d ppm, TVOC: %d ppb' % (s.eCO2, s.tVOC)
+        return 'eCO2: %d ppm, TVOC: %d ppb' % (self.eCO2, self.tVOC)
         # doesn't seem to work
 
     def data_ready(self):

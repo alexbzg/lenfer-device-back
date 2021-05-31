@@ -1,10 +1,11 @@
+import machine
 from machine import Pin, RTC
 import uasyncio
 import utime
 import ulogging
 
 from relay import RelaysController
-from timers import Timer
+from timers import Timer, time_tuple_to_seconds
 from power_monitor import PowerMonitor
 from utils import manage_memory
 
@@ -72,6 +73,39 @@ class FeederController(RelaysController):
                 cur = self._power_monitor.current()
                 self.device.append_log_entries("Feeder current: {0:+.2f}".format(cur))
                 await uasyncio.sleep(1)
+
+    async def check_timers(self):
+        off = None
+        while True:
+            time = time_tuple_to_seconds(machine.RTC().datetime())
+            for timer in self.timers:
+                if timer.time_on == time:
+                    start = utime.time()
+                    now = start
+                    prev_time = start
+                    expired = 0
+                    retries = 0
+                    self.on()
+                    while expired < timer.duration and retries < 3:
+                        await uasyncio.sleep(1)
+                        now = utime.time()
+                        current = self._power_monitor.current() if self._power_monitor else None
+                        if current:
+                            self.device.append_log_entries("Feeder current: {0:+.2f}".format(current))
+                        expired += now - prev_time
+                        prev_time = now
+                        if current and current > self._reverse_threshold:
+                            await self.engine_reverse(True)
+                            await uasyncio.sleep(self._reverse_duration)
+                            expired -= self._reverse_duration + 2 * self._reverse_delay
+                            retries += 1
+                            await self.engine_reverse(False)
+                    self.off()
+                    break
+                if timer.time_on > time:
+                    break
+            manage_memory()
+            await uasyncio.sleep(60 - machine.RTC().datetime()[6])
 
     async def run_for(self, duration):
         start = utime.time()

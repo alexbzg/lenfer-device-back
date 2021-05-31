@@ -54,23 +54,29 @@ class SensorDeviceCCS811(SensorDevice):
 
     def __init__(self, conf, controller, i2c_list):
         SensorDevice.__init__(self, conf, controller)
-        self._ccs811 = CCS811(i2c_list[conf['i2c']])
+        self._ccs811 = None
+        try:
+            self._ccs811 = CCS811(i2c_list[conf['i2c']])
+        except Exception as exc:
+            LOG.exc(exc, 'CCS811 initialization error')
 
     def read(self):
         "reads sensors data and stores in into controller data field"
-        co2 = None
-        try:
-            if self._ccs811.data_ready():
-                co2 = self._ccs811.eCO2
-            temp = self._controller.data[self._controller.sensors_roles['temperature'][0]]
-            humid = self._controller.data[self._controller.sensors_roles['humidity'][0]]
-            if temp != None and humid != None:
-                self._ccs811.put_envdata(humid, temp)
-        except Exception as exc:
-            pass
-            #LOG.exc(exc, 'BME280 error')
-        finally:
-            self._controller.data[self._sensors_ids[0]] = co2
+        if self._ccs811:
+            co2 = None
+            try:
+                if self._ccs811.data_ready():
+                    co2 = self._ccs811.eCO2
+                    temp = self._controller.data[self._controller.sensors_roles['temperature'][0]]
+                    humid = self._controller.data[self._controller.sensors_roles['humidity'][0]]
+                    if temp != None and humid != None:
+                        self._ccs811.put_envdata(humid, temp)
+            except Exception as exc:
+                pass
+                #LOG.exc(exc, 'BME280 error')
+            finally:
+                if co2:
+                    self._controller.data[self._sensors_ids[0]] = co2
 
 class SensorDeviceDS18x20(SensorDevice):
     "ds18x20 sensor handler"
@@ -148,16 +154,18 @@ class ClimateController(LenferController):
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ccs811':
-                self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
+               self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
 
     def update_settings(self):
         if 'switches' in self.device.settings and self.device.settings['switches']:
             for switch_id, enabled in self.device.settings['switches'].items():
-                switch_filter = [item for item in self.switches.values() if item['id'] == switch_id]
+                switch_filter = [item for item in self.switches.values() if item['id'] == int(switch_id)]
                 if switch_filter:
-                    switch_filter[0]['enabled'] = enabled
+                    switch = switch_filter[0]
+                    if 'pin' in switch:
+                        switch['enabled'] = enabled
 
     async def read(self):
 
@@ -217,6 +225,9 @@ class ClimateController(LenferController):
 
         day = self.get_schedule_day()
 
+        co2 = self.data[self.sensors_roles['co2'][0]] if 'co2' in self.sensors_roles and self.sensors_roles['co2']\
+            else None 
+
         if day:
             temp_idx = self.get_schedule_param_idx('temperature')
             temp_delta = self.schedule['params']['delta'][temp_idx]
@@ -270,31 +281,34 @@ class ClimateController(LenferController):
                     LOG.info('Mix off')
         if self.switches['vent_out']['enabled']:
             if (humid and humid_limits and humid > humid_limits[1]) or\
-                (temp[0] and temp_limits and temp[0] > temp_limits[1]):
+                (temp[0] and temp_limits and temp[0] > temp_limits[1]) or\
+                (co2 and co2 > 4000):
                 if not self.switches['vent_out']['pin'].value():
-                    self.switches['vent_out']['pin'].value(1)
+                    self.switches['vent_out']['pin'].on()
                     LOG.info('Out on')
             elif (not humid or not humid_limits or humid < humid_limits[1]) and\
-                (not temp[0] or not temp_limits or temp[0] < temp_limits[1]):
+                (not temp[0] or not temp_limits or temp[0] < temp_limits[1]) and\
+                (co2 == None or co2 < 4000):
                 if self.switches['vent_out']['pin'].value():
-                    self.switches['vent_out']['pin'].value(0)
+                    self.switches['vent_out']['pin'].off()
                     LOG.info('Out off')
         if self.switches['humid']['enabled']:
             if (humid and humid_limits and humid < humid_limits[0]):
                 if not self.switches['humid']['pin'].value():
-                    self.switches['humid']['pin'].value(1)
+                    self.switches['humid']['pin'].on()
                     LOG.info('Humid on')
             else:
                 if self.switches['humid']['pin'].value():
-                    self.switches['humid']['pin'].value(0)
+                    self.switches['humid']['pin'].off()
                     LOG.info('Humid off')
         if self.switches['air_con']['enabled']:
             if temp[0] and temp_limits and temp[0] > temp_limits[1] + 3:
                 if not self.switches['air_con']['pin'].value():
                     self.switches['air_con']['pin'].value(1)
                     LOG.info('Air con on')
-                    if self.switches['vent_out']['enabled'] and self.switches['vent_out']['pin'].value():
-                        self.switches['vent_out'].off()
+                    if self.switches['vent_out']['enabled'] and self.switches['vent_out']['pin'].value()\
+                        and (co2 == None or co2 < 2000):
+                        self.switches['vent_out']['pin'].off()
             else:
                 if self.switches['air_con']['pin'].value():
                     self.switches['air_con']['pin'].off()
