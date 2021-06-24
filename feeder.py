@@ -21,8 +21,12 @@ class FeederController(RelaysController):
     def __init__(self, device, conf):
 
         RelaysController.__init__(self, device, conf['relay'])
-        self._power_monitor = (PowerMonitor(conf['power_monitor'], device._conf['i2c'])
-                               if conf['power_monitor'] else None)
+        self._power_monitor = None
+        if conf['power_monitor']: 
+            try: 
+                self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
+            except Exception as exc:
+                LOG.exc(exc, 'Power monitor init error')
         self._log_queue = []
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False

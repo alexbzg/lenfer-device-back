@@ -1,15 +1,14 @@
 import gc
 import micropython
 import uerrno
-#from time import sleep
-
-import uasyncio
+import utime
+import ujson
 import network
 import machine
 from machine import WDT, Pin, SoftI2C
-import ujson
-import ulogging
 
+import uasyncio
+import ulogging
 import urequests
 
 from timers import RtcController
@@ -45,7 +44,7 @@ class LenferDevice:
             "ssid_failure": False,
             "ssid_delay": False,
             "srv_req_pending": False,
-            "srv_unreach_count": 0
+            "srv_last_contact": utime.time()
             }
         self.log_queue = []
         self._conf = load_json('conf.json')
@@ -278,9 +277,8 @@ class LenferDevice:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", self.server_uri + url)
             LOG.error("data: %s", data)
-            self.status['srv_unreach_count'] += 1
-            LOG.error("server unreachable count: %s", self.status['srv_unreach_count'])
-            if self.status['srv_unreach_count'] > 2:
+            if utime.time() - self.status['srv_last_contact'] > 1800:
+                LOG.error("server unreachable for 30 minutes: reboot")
                 machine.reset()
         except Exception as exc:
             LOG.exc(exc, 'Data posting error')
@@ -290,6 +288,7 @@ class LenferDevice:
             if hasattr(self, 'WDT'):
                 self.WDT.feed()
             self.status['srv_req_pending'] = False
+            self.status['srv_last_contact'] = utime.time()
         if rsp:
             if raw:
                 return rsp.raw

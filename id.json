@@ -1,8 +1,1 @@
-{
-    "hash": "N0YNPl",
-    "type": "feeder",
-    "updates": true,
-    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjI0fQ.SBKpoUszfuFjkt9UZqg8UosnxpX7ocJSe-U4O1EgfAY",
-    "id": 24,
-    "disable_software_updates": true
-}
+{"hash": "N0YNPl", "type": "feeder_2_2", "updates": true, "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjI0fQ.SBKpoUszfuFjkt9UZqg8UosnxpX7ocJSe-U4O1EgfAY", "id": 24, "disable_software_updates": false}

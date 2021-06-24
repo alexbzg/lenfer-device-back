@@ -122,6 +122,8 @@ class SensorDeviceDS18x20(SensorDevice):
 
 class ClimateController(LenferController):
 
+    CO2_THRESHOLD = 2500
+
     def __init__(self, device, conf):
         LenferController.__init__(self, device)
         self.limits = device.settings['limits'] if 'limits' in device.settings else False
@@ -288,7 +290,7 @@ class ClimateController(LenferController):
                     LOG.info('Out on')
             elif (not humid or not humid_limits or humid < humid_limits[1]) and\
                 (not temp[0] or not temp_limits or temp[0] < temp_limits[1]) and\
-                (co2 == None or co2 < 4000):
+                (co2 == None or co2 < ClimateController.CO2_THRESHOLD):
                 if self.switches['vent_out']['pin'].value():
                     self.switches['vent_out']['pin'].off()
                     LOG.info('Out off')
