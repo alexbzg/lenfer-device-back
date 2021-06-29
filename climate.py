@@ -169,7 +169,7 @@ class ClimateController(LenferController):
                     if 'pin' in switch:
                         switch['enabled'] = enabled
 
-    async def read(self):
+    async def read(self, once=False):
 
         while True:
             for sensor_device in self.sensor_devices:
@@ -181,6 +181,8 @@ class ClimateController(LenferController):
             if self.switches:
                 self.adjust_switches()
             manage_memory()
+            if once:
+                break
 
     def get_schedule_day(self):
         if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
@@ -195,7 +197,7 @@ class ClimateController(LenferController):
         else:
             return None
 
-    async def adjust_light(self):
+    async def adjust_light(self, once=False):
         while True:
             day = self.get_schedule_day()
             if day:
@@ -212,16 +214,21 @@ class ClimateController(LenferController):
                     if self.light.value():
                         print("Light off")
                         self.light.value(0)
+            if once:
+                break
             await uasyncio.sleep(59)
 
     def get_schedule_param_idx(self, param):
         return self.schedule['params_list'].index(param)
         
     def adjust_switches(self):
-        temp = [
-            self.data[self.sensors_roles['temperature'][0]],
-            self.data[self.sensors_roles['temperature'][1]]
-            ]
+        temp = []
+        for sensor_idx in self.sensors_roles['temperature']:
+            if self.data[sensor_idx]:
+                temp.append(self.data[sensor_idx])
+                if len(temp) > 1:
+                    break
+
         humid = self.data[self.sensors_roles['humidity'][0]]
         temp_limits, humid_limits = None, None
 

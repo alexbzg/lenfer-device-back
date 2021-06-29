@@ -29,9 +29,11 @@ class RtcController(LenferController):
         rtc.init(datetime_tuple)
         self.save_time()
 
-    async def adjust_time(self):
+    async def adjust_time(self, once=False):
         while True:
             self.get_time(set_rtc=True)
+            if once:
+                break
             await uasyncio.sleep(600)
             gc.collect()
 

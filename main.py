@@ -156,6 +156,6 @@ async def get_modules(req, rsp):
 async def get_device_hash(req, rsp):
     await send_json(rsp, DEVICE.id['hash'])
 
-DEVICE.start_async()
+DEVICE.start()
 gc.collect()
 APP.run(debug=True, host=WLAN.host, port=80)

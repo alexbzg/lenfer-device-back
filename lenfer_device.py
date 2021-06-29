@@ -11,7 +11,6 @@ import uasyncio
 import ulogging
 import urequests
 
-from timers import RtcController
 from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
 
@@ -77,6 +76,7 @@ class LenferDevice:
                         from climate import ClimateController
                         self.modules[module] = ClimateController(self, module_conf)
                     elif module == 'rtc':
+                        from timers import RtcController
                         self.modules[module] = RtcController(module_conf, self._conf['i2c'])
                         self.modules['rtc'].get_time(set_rtc=True)
                     elif module == 'relays':
@@ -184,15 +184,17 @@ class LenferDevice:
             gc.collect()
 
 
-    async def task_check_software_updates(self):
+    async def task_check_software_updates(self, once=False):
         while True:
             self.WDT.feed()
             if check_software_update():
                 schedule_software_update()
             self.WDT.feed()
+            if once:
+                break
             await uasyncio.sleep(3600)
 
-    async def check_updates(self):
+    async def check_updates(self, once=False):
         while True:
             try:
                 data = {
@@ -215,11 +217,14 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'Server updates check error')
             manage_memory()
+            if once:
+                break
             await uasyncio.sleep(30)
 
-    async def post_sensor_data(self):
+    async def post_sensor_data(self, once=False):
         while True:
-            await uasyncio.sleep(58)
+            if not once:
+                await uasyncio.sleep(58)
             try:
                 data = {'data': []}
                 tstamp = self.post_tstamp()
@@ -240,6 +245,8 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'Server sensors data post error')
             manage_memory()
+            if once:
+                break
 
     async def post_log(self):
         while True:
@@ -306,8 +313,33 @@ class LenferDevice:
     def online(self):
         return 'id' in self.id and self.id['id'] and self._wlan.online()
 
-    def start_async(self):
+    def deepsleep(self):
+        return 'deepsleep' in self.settings and self.settings['deepsleep']
+
+    def start(self):
         self.WDT = WDT(timeout=60000)        
+        if self.deepsleep():
+            if self.modules['rtc']:
+                uasyncio.run(self.modules['rtc'].adjust_time(once=True))
+                self.WDT.feed()
+            if self.modules['climate']:
+                uasyncio.run(self.modules['climate'].read(once=True))
+                self.WDT.feed()
+                if self.online():
+                    uasyncio.run(self.post_sensor_data(once=True))
+                if self.modules['climate'].light:
+                    uasyncio.run(self.modules['climate'].adjust_light(once=True))                
+            if self.online():
+                if 'updates' in self.id and self.id['updates']:
+                    uasyncio.run(self.check_updates(once=True))
+                if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
+                    uasyncio.run(self.task_check_software_updates(once=True))
+            if self.deepsleep():
+                machine.deepsleep(self.deepsleep())
+                
+        self.start_async()
+
+    def start_async(self):
         loop = uasyncio.get_event_loop()     
         loop.create_task(self.bg_leds())
         loop.create_task(self.check_wlan_switch())

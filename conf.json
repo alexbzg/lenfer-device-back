@@ -1,34 +1,90 @@
 {
     "modules": {
-        "feeder": {
+        "climate": {
             "enabled": true,
-            "reverse": 21,
-            "buttons": [27, 26],
-            "relay": {
-                "button": null,
-                "pin": 22
+            "sensor_devices": [
+                {
+                    "type": "bme280",
+                    "i2c": 0,
+                    "sensors_ids": [2, 3]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [4]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [5]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [12]
+                },
+                {
+                    "type": "ccs811",
+                    "i2c": 0,
+                    "sensors_ids": [7]
+                }
+            ],
+            "switches":  {
+                "heat": {
+                    "pin": 32,
+                    "id": 1
+                },
+                "vent_out": {
+                    "pin": 26,
+                    "id": 2
+                },                
+                "vent_mix": {
+                    "pin": 25,
+                    "id": 3
+                },                
+                "humid": {
+                    "pin": 27,
+                    "id": 4
+                },                
+                "air_con": {
+                    "pin": 13,
+                    "id": 5
+                }
             },
-            "adc": 35,
-            "__power_monitor": false,
-            "power_monitor": {
-                "i2c": 0,
-                "shunt_ohms": 0.1
-            }
+            "light": 33,
+            "sensors_roles": {
+                "temperature": [2,4,5,6],
+                "humidity": [3],
+                "co2": [7]
+            },
+            "sensors_titles": {
+                "2": "низ",
+                "3": "низ",
+                "4": "верх",
+                "5": "снаружи",
+                "6": "",
+                "7": "co2"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": [60, 10]
+            },
+            "sleep": 750
         },
         "rtc": {
             "enabled": true,
             "i2c": 0
-        }        
+        }
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 32,
-        "sda": 33
+        "scl": 23,
+        "sda": 22
     }],
-    "ow": [],
+    "ow": [18, 19, 21],
     "leds": {
-        "status": 23
+        "status": 16
     },
     "factory_reset": 17,
-    "wlan_switch": 19
+    "wlan_switch": 36
 }
