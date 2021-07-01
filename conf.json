@@ -6,85 +6,40 @@
                 {
                     "type": "bme280",
                     "i2c": 0,
-                    "sensors_ids": [2, 3]
+                    "sensors_ids": [6, 7]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [4]
-                },
+                    "sensors_ids": [8]
+                },                
                 {
                     "type": "ds18x20",
                     "ow": 1,
-                    "sensors_ids": [5]
-                },
-                {
-                    "type": "ds18x20",
-                    "ow": 2,
-                    "sensors_ids": [12]
-                },
-                {
-                    "type": "ccs811",
-                    "i2c": 0,
-                    "sensors_ids": [7]
+                    "sensors_ids": [9]
                 }
             ],
-            "switches":  {
-                "heat": {
-                    "pin": 32,
-                    "id": 1
-                },
-                "vent_out": {
-                    "pin": 26,
-                    "id": 2
-                },                
-                "vent_mix": {
-                    "pin": 25,
-                    "id": 3
-                },                
-                "humid": {
-                    "pin": 27,
-                    "id": 4
-                },                
-                "air_con": {
-                    "pin": 13,
-                    "id": 5
-                }
-            },
-            "light": 33,
-            "sensors_roles": {
-                "temperature": [2,4,5,6],
-                "humidity": [3],
-                "co2": [7]
-            },
+            "switches": false,
+            "limits": false,
+            "sensors_roles": false,
             "sensors_titles": {
-                "2": "низ",
-                "3": "низ",
-                "4": "верх",
-                "5": "снаружи",
-                "6": "",
-                "7": "co2"
-            },
-            "limits": {
-                "temperature": [20, 0.1],
-                "humidity": [60, 10]
+                "1": "BME280",
+                "2": "BME280",
+                "3": "D1",
+                "4": "D2"
             },
             "sleep": 750
-        },
-        "rtc": {
-            "enabled": true,
-            "i2c": 0
         }
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 23,
-        "sda": 22
+        "scl": 17,
+        "sda": 16
     }],
-    "ow": [18, 19, 21],
+    "ow": [18, 13],
     "leds": {
-        "status": 16
+        "status": 33
     },
-    "factory_reset": 17,
-    "wlan_switch": 36
+    "factory_reset": 21,
+    "wlan_switch": 22
 }

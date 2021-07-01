@@ -196,6 +196,7 @@ class LenferDevice:
 
     async def check_updates(self, once=False):
         while True:
+            deepsleep = bool(self.deepsleep())
             try:
                 data = {
                     'schedule': {
@@ -214,6 +215,8 @@ class LenferDevice:
                         for ctrl in self.modules.values():
                             if ctrl:
                                 ctrl.update_settings()
+                    if deepsleep != bool(self.deepsleep()):
+                        machine.reset()
             except Exception as exc:
                 LOG.exc(exc, 'Server updates check error')
             manage_memory()
@@ -266,7 +269,7 @@ class LenferDevice:
             time_tuple = machine.RTC().datetime()
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
-    async def srv_post(self, url, data, raw=False):
+    async def srv_post(self, url, data, raw=False):        
         while self.status['srv_req_pending']:
             await uasyncio.sleep_ms(50)
         self.status['srv_req_pending'] = True
@@ -335,7 +338,7 @@ class LenferDevice:
                 if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
                     uasyncio.run(self.task_check_software_updates(once=True))
             if self.deepsleep():
-                machine.deepsleep(self.deepsleep())
+                machine.deepsleep(self.deepsleep()*60000)
                 
         self.start_async()
 
