@@ -139,7 +139,9 @@ class ClimateController(LenferController):
         if 'switches' in conf and conf['switches']:
             
             for switch_type in ('heat', 'vent_out', 'vent_mix', 'humid', 'air_con'):
-                if switch_type in conf['switches'] and conf['switches'][switch_type]:
+                if switch_type in conf['switches'] and conf['switches'][switch_type] and\
+                    (not self.device.mode or 'modes' not in conf['switches'][switch_type] or 
+                    not conf['switches'][switch_type] or self.device.mode in conf['switches'][switch_type]):
                     switch_conf = conf['switches'][switch_type]
                     self.switches[switch_type] = {
                         'pin': Pin(switch_conf['pin'], Pin.OUT),

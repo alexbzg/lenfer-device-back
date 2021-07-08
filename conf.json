@@ -6,17 +6,17 @@
                 {
                     "type": "bme280",
                     "i2c": 0,
-                    "sensors_ids": [6, 7]
+                    "sensors_ids": [15, 16]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [8]
+                    "sensors_ids": [17]
                 },                
                 {
                     "type": "ds18x20",
                     "ow": 1,
-                    "sensors_ids": [9]
+                    "sensors_ids": [18]
                 }
             ],
             "switches": false,

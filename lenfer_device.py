@@ -23,6 +23,13 @@ class LenferDevice:
 
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
+    def module_enabled(self, module_conf):
+        if 'enabled' in module_conf and module_conf['enabled']:
+            return True
+        if self.mode and 'modes' in module_conf and module_conf['modes'] and self.mode in module_conf['modes']:
+            return True
+        return False
+
     def save_settings(self):
         save_json(self.settings, 'settings.json')
         self.status["ssid_delay"] = True
@@ -36,6 +43,7 @@ class LenferDevice:
         self.WDT = None
         self._schedule = None
         self._wlan = wlan
+        self.mode = None
         self.status = {
             "wlan": None,
             "factory_reset": False,
@@ -50,6 +58,8 @@ class LenferDevice:
         self.settings = load_json('settings.json')
         if not self.settings:
             self.load_def_settings()
+        if 'mode' in self.settings and self.settings['mode']:
+            self.mode = self.settings['mode']
 
         wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
         wlan_switch_button.irq(self.wlan_switch_irq)
@@ -70,7 +80,7 @@ class LenferDevice:
         for led in self.leds.values():
             led.off()
         for module, module_conf in self._conf['modules'].items():
-            if module_conf['enabled']:
+            if self.module_enabled(module_conf):
                 try:
                     if module == 'climate':
                         from climate import ClimateController
@@ -216,6 +226,8 @@ class LenferDevice:
                             if ctrl:
                                 ctrl.update_settings()
                     if deepsleep != bool(self.deepsleep()):
+                        machine.reset()                    
+                    if 'mode' in self.settings and self.mode != self.settings['mode']:
                         machine.reset()
             except Exception as exc:
                 LOG.exc(exc, 'Server updates check error')
