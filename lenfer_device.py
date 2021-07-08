@@ -295,6 +295,7 @@ class LenferDevice:
             rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
+            self.status['srv_last_contact'] = utime.time()
         except OSError as exc:
             LOG.exc(exc, 'Data posting error')
             LOG.error("URL: %s", self.server_uri + url)
@@ -310,7 +311,6 @@ class LenferDevice:
             if hasattr(self, 'WDT'):
                 self.WDT.feed()
             self.status['srv_req_pending'] = False
-            self.status['srv_last_contact'] = utime.time()
         if rsp:
             if raw:
                 return rsp.raw
