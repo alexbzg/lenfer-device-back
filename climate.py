@@ -9,6 +9,7 @@ import uasyncio
 import ulogging
 
 import BME280
+import ahtx0
 from CCS811 import CCS811
 from lenfer_controller import LenferController
 from utils import manage_memory
@@ -42,6 +43,29 @@ class SensorDeviceBME280(SensorDevice):
             bme = BME280.BME280(i2c=self._i2c)
             temp = round((bme.read_temperature() / 100), 1)
             humid = int(bme.read_humidity() // 1024)
+        except Exception as exc:
+            pass
+            #LOG.exc(exc, 'BME280 error')
+        finally:
+            self._controller.data[self._sensors_ids[0]] = temp
+            self._controller.data[self._sensors_ids[1]] = humid
+
+class SensorDeviceAHT20(SensorDevice):
+    "AHT20 sensor handler"
+
+    def __init__(self, conf, controller, i2c_list):
+        SensorDevice.__init__(self, conf, controller)
+        try:
+            self._ahtx0 = ahtx0.AHT20(i2c_list[conf['i2c']])
+        except Exception as exc:
+            LOG.exc(exc, 'AHTX0 initialization error')
+
+    def read(self):
+        "reads sensors data and stores in into controller data field"
+        humid, temp = None, None
+        try:
+            temp = self._ahtx0.temperature
+            humid = self._ahtx0.relative_humidity
         except Exception as exc:
             pass
             #LOG.exc(exc, 'BME280 error')
@@ -157,6 +181,8 @@ class ClimateController(LenferController):
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'bme280':
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
+            elif sensor_device_conf['type'] == 'aht20':
+               self.sensor_devices.append(SensorDeviceAHT20(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ccs811':
                self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':

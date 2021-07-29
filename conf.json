@@ -4,7 +4,7 @@
             "enabled": true,
             "sensor_devices": [
                 {
-                    "type": "bme280",
+                    "type": "aht20",
                     "i2c": 0,
                     "sensors_ids": [15, 16]
                 },
