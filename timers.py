@@ -54,6 +54,7 @@ class Timer:
         self.time_off = conf['off'] if 'off' in conf else None
         self.duration = conf['duration'] if 'duration' in conf else None
         self.period = conf['period'] if 'period' in conf else None
+        self.sun = conf['sun'] if 'sun' in conf else 0
         self.relay = relay
         self.active = False
 

@@ -293,7 +293,7 @@ class ClimateController(LenferController):
         if self.switches['vent_out']['enabled']:
             if (humid and humid_limits and humid > humid_limits[1]) or\
                 (temp[0] and temp_limits and temp[0] > temp_limits[1]) or\
-                (co2 and co2 > 4000):
+                (co2 and co2 > ClimateController.CO2_THRESHOLD):
                 if not self.switches['vent_out']['pin'].value():
                     self.switches['vent_out']['pin'].on()
                     LOG.info('Out on')

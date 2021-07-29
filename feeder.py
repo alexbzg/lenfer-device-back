@@ -4,6 +4,8 @@ import uasyncio
 import utime
 import ulogging
 
+from Suntime import Sun
+
 from relay import RelaysController
 from timers import Timer, time_tuple_to_seconds
 from power_monitor import PowerMonitor
@@ -27,6 +29,7 @@ class FeederController(RelaysController):
                 self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
+        self.time_table = []
         self._log_queue = []
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
@@ -78,16 +81,38 @@ class FeederController(RelaysController):
                 self.device.append_log_entries("Feeder current: {0:+.2f}".format(cur))
                 await uasyncio.sleep(1)
 
+    def build_time_table(self):
+        sun_data = None
+        self.time_table = []
+        if ('location' in self.device.settings and self.device.settings['location']
+            and 'tzone' in self.device.settings and self.device.settings['tzone']):
+            sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
+                self.device.settings['tzone'])
+            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time()), time_tuple_to_seconds(sun.get_sunset_time())]
+        for timer in self.timers:
+            if timer.sun:
+                if sun_data:
+                    time_on = sun_data[0 if timer.sun == 1 else 1] + timer.time_on
+                    self.time_table.append(self.create_timer({
+                        'on': time_on,
+                        'duration': timer.duration
+                    }))
+            else:
+                self.time_table.append(timer)
+        
+
     async def check_timers(self):
         off = None
         while True:
             time = time_tuple_to_seconds(machine.RTC().datetime())
-            for timer in self.timers:
-                if timer.time_on == time:
+            if time == 0:
+                self.build_time_table()
+            for timer in self.time_table:
+                if timer.time_on <= time < timer.time_on + timer.duration:
                     start = utime.time()
                     now = start
                     prev_time = start
-                    expired = 0
+                    expired = timer.time_on + timer.duration - time
                     retries = 0
                     self.on()
                     while expired < timer.duration and retries < 3:
@@ -105,7 +130,6 @@ class FeederController(RelaysController):
                             retries += 1
                             await self.engine_reverse(False)
                     self.off()
-                    break
                 if timer.time_on > time:
                     break
             manage_memory()
@@ -150,6 +174,7 @@ class FeederController(RelaysController):
 
     def update_settings(self):
         RelaysController.update_settings(self)
+        self.build_time_table()
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:

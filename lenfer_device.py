@@ -220,6 +220,7 @@ class LenferDevice:
                     if 'schedule' in updates and updates['schedule']:
                         self.schedule = updates['schedule']
                     if 'props' in updates and updates['props']:
+                        LOG.info(updates['props'])
                         self.settings = updates['props']
                         self.save_settings()
                         for ctrl in self.modules.values():
