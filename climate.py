@@ -256,6 +256,8 @@ class ClimateController(LenferController):
                 temp.append(self.data[sensor_idx])
                 if len(temp) > 1:
                     break
+        while len(temp) < 2:
+            temp.append(None)
 
         humid = self.data[self.sensors_roles['humidity'][0]]
         temp_limits, humid_limits = None, None
