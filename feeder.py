@@ -1,3 +1,4 @@
+import gc
 import machine
 from machine import Pin, RTC
 import uasyncio
@@ -6,7 +7,6 @@ import ulogging
 
 from Suntime import Sun
 
-from relay import RelaysController
 from timers import Timer, time_tuple_to_seconds
 from power_monitor import PowerMonitor
 from utils import manage_memory
@@ -18,18 +18,21 @@ class FeederTimer(Timer):
     def _on_off(self):
         uasyncio.get_event_loop().create_task(self.relay.run_for(self.duration))
 
-class FeederController(RelaysController):
+class FeederController:
 
     def __init__(self, device, conf):
 
-        RelaysController.__init__(self, device, conf['relay'])
         self._power_monitor = None
         if conf['power_monitor']: 
             try: 
                 self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
-        self.time_table = []
+        self._conf = conf
+        self._active = {'timer': False, 'manual': False}
+        self.timers = []
+        self.init_timers(device.settings['timers'])
+
         self._log_queue = []
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
@@ -53,6 +56,26 @@ class FeederController(RelaysController):
             self.reverse = reverse
             self.on(True, 'manual')
 
+    def init_timers(self, conf=None):
+        self.timers = []
+        if conf != None:
+            self._conf['timers'] = conf
+        sun_data = None
+        self.time_table = []
+        if ('location' in self.device.settings and self.device.settings['location']
+            and 'tzone' in self.device.settings and self.device.settings['tzone']):
+            sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
+                self.device.settings['tzone'])
+            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time()), time_tuple_to_seconds(sun.get_sunset_time())]
+        for timer_conf in conf:
+            timer = self.create_timer(timer_conf)
+            if timer.sun:
+                if sun_data:
+                    time_on = sun_data[0 if timer.sun == 1 else 1] + timer.time_on
+                    timer.time_on = time_on
+            self.timers.append(timer)
+        self.timers.sort(key=lambda timer: timer.time_on)
+
     @property
     def state(self):
         return self.pin.value()
@@ -63,7 +86,13 @@ class FeederController(RelaysController):
 
     def on(self, value=True, source='timer'):
         if self.state != value:
-            RelaysController.on(self, value, source)
+            if self._active[source] != value:
+                self._active[source] = value
+                for state in self._active.values():
+                    if state:
+                        self.pin.on()
+                        gc.collect()
+            self.pin.off()
             self.device.append_log_entries("Feeder {0} {1}{2}".format(
                 'start' if self.state else 'stop',
                 ' (reverse) ' if self.reverse else '',
@@ -74,6 +103,9 @@ class FeederController(RelaysController):
                 self.reverse = False
             manage_memory()
 
+    def off(self, source='timer'):
+        self.on(False, source)
+
     async def check_current(self):
         if self._power_monitor:
             while self.state:
@@ -81,33 +113,13 @@ class FeederController(RelaysController):
                 self.device.append_log_entries("Feeder current: {0:+.2f}".format(cur))
                 await uasyncio.sleep(1)
 
-    def build_time_table(self):
-        sun_data = None
-        self.time_table = []
-        if ('location' in self.device.settings and self.device.settings['location']
-            and 'tzone' in self.device.settings and self.device.settings['tzone']):
-            sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
-                self.device.settings['tzone'])
-            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time()), time_tuple_to_seconds(sun.get_sunset_time())]
-        for timer in self.timers:
-            if timer.sun:
-                if sun_data:
-                    time_on = sun_data[0 if timer.sun == 1 else 1] + timer.time_on
-                    self.time_table.append(self.create_timer({
-                        'on': time_on,
-                        'duration': timer.duration
-                    }))
-            else:
-                self.time_table.append(timer)
-        
-
     async def check_timers(self):
         off = None
         while True:
             time = time_tuple_to_seconds(machine.RTC().datetime())
             if time == 0:
-                self.build_time_table()
-            for timer in self.time_table:
+                self.init_timers()
+            for timer in self.timers:
                 if timer.time_on <= time < timer.time_on + timer.duration:
                     start = utime.time()
                     now = start
@@ -173,8 +185,10 @@ class FeederController(RelaysController):
         return self._reverse.value()
 
     def update_settings(self):
-        RelaysController.update_settings(self)
-        self.build_time_table()
+        if 'timers' in self.device.settings:
+            while self.timers:
+                self.delete_timer(0, change_settings=False)
+            self.init_timers(self.device.settings['timers']) 
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:
