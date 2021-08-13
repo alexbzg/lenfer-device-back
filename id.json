@@ -1,1 +1,9 @@
-{"type": "climate_info", "updates": true, "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjI1fQ.2jNtEun909pJIx6GmKfjun3STzoD4HeVKCHArwt_BwY", "id": 25, "hash": "p0D7yK", "disable_software_updates": false}
+{
+    "hash": "N0YNPl",
+    "type": "feeder",
+    "updates": true,
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjI0fQ.SBKpoUszfuFjkt9UZqg8UosnxpX7ocJSe-U4O1EgfAY",
+    "id": 24,
+    "disable_software_updates": true,
+    "debug": true
+}

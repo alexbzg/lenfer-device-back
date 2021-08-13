@@ -7,6 +7,7 @@ import ulogging
 
 from Suntime import Sun
 
+from lenfer_controller import LenferController
 from timers import Timer, time_tuple_to_seconds
 from power_monitor import PowerMonitor
 from utils import manage_memory
@@ -18,10 +19,10 @@ class FeederTimer(Timer):
     def _on_off(self):
         uasyncio.get_event_loop().create_task(self.relay.run_for(self.duration))
 
-class FeederController:
+class FeederController(LenferController):
 
     def __init__(self, device, conf):
-
+        LenferController.__init__(self, device)
         self._power_monitor = None
         if conf['power_monitor']: 
             try: 
@@ -29,9 +30,11 @@ class FeederController:
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
         self._conf = conf
-        self._active = {'timer': False, 'manual': False}
+        self.pin = Pin(conf['pin'], Pin.OUT)
+        self.pin.off()
+        self._active = {}
         self.timers = []
-        self.init_timers(device.settings['timers'])
+        self.init_timers()
 
         self._log_queue = []
         self._reverse = Pin(conf['reverse'], Pin.OUT)
@@ -56,25 +59,35 @@ class FeederController:
             self.reverse = reverse
             self.on(True, 'manual')
 
-    def init_timers(self, conf=None):
+    def init_timers(self):
         self.timers = []
-        if conf != None:
-            self._conf['timers'] = conf
         sun_data = None
         self.time_table = []
         if ('location' in self.device.settings and self.device.settings['location']
-            and 'tzone' in self.device.settings and self.device.settings['tzone']):
+            and 'timezone' in self.device.settings and self.device.settings['timezone']):
             sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
-                self.device.settings['tzone'])
-            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time()), time_tuple_to_seconds(sun.get_sunset_time())]
-        for timer_conf in conf:
+                self.device.settings['timezone'])
+            LOG.info(sun.get_sunrise_time())
+            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time(), sun=True), time_tuple_to_seconds(sun.get_sunset_time(), sun=True)]
+            LOG.info(sun_data)
+        for timer_conf in self.device.settings['timers']:
             timer = self.create_timer(timer_conf)
             if timer.sun:
                 if sun_data:
                     time_on = sun_data[0 if timer.sun == 1 else 1] + timer.time_on
                     timer.time_on = time_on
+                else:
+                    continue
             self.timers.append(timer)
+            
         self.timers.sort(key=lambda timer: timer.time_on)
+        LOG.info([timer.time_on for timer in self.timers])
+
+    def delete_timer(self, timer_idx, change_settings=True):
+        self.off(source=self.timers[timer_idx])
+        if change_settings:
+            del self.device.settings['timers'][timer_idx]
+        del self.timers[timer_idx]
 
     @property
     def state(self):
@@ -84,26 +97,29 @@ class FeederController:
     def state(self, value):
         self.on(value=value)
 
-    def on(self, value=True, source='timer'):
-        if self.state != value:
-            if self._active[source] != value:
-                self._active[source] = value
-                for state in self._active.values():
-                    if state:
-                        self.pin.on()
-                        gc.collect()
-            self.pin.off()
-            self.device.append_log_entries("Feeder {0} {1}{2}".format(
-                'start' if self.state else 'stop',
-                ' (reverse) ' if self.reverse else '',
-                source))
-            if value and source == 'manual' and self._power_monitor:
-                uasyncio.get_event_loop().create_task(self.check_current())
-            if not value:
+    def on(self, value=True, source='manual'):
+        if value:            
+            self._active[source] = True
+        else:
+            if source in self._active:
+                del self._active[source]
+        if self.state != bool(self._active):
+            if self.state:
+                self.pin.off()
                 self.reverse = False
-            manage_memory()
+                self.device.append_log_entries("Feeder stop {0}{1}".format(
+                    ' (reverse) ' if self.reverse else '',
+                    'manual' if source == 'manual' else 'timer'))                
+            else:
+                self.pin.on()
+                self.device.append_log_entries("Feeder start {0}{1}".format(
+                    ' (reverse) ' if self.reverse else '',
+                    'manual' if source == 'manual' else 'timer'))                
+        if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
+            uasyncio.get_event_loop().create_task(self.check_current())
+        manage_memory()
 
-    def off(self, source='timer'):
+    def off(self, source='manual'):
         self.on(False, source)
 
     async def check_current(self):
@@ -124,9 +140,9 @@ class FeederController:
                     start = utime.time()
                     now = start
                     prev_time = start
-                    expired = timer.time_on + timer.duration - time
+                    expired = timer.time_on - time
                     retries = 0
-                    self.on()
+                    self.on(source=timer)
                     while expired < timer.duration and retries < 3:
                         await uasyncio.sleep(1)
                         now = utime.time()
@@ -141,7 +157,7 @@ class FeederController:
                             expired -= self._reverse_duration + 2 * self._reverse_delay
                             retries += 1
                             await self.engine_reverse(False)
-                    self.off()
+                    self.off(source=timer)
                 if timer.time_on > time:
                     break
             manage_memory()
@@ -188,7 +204,7 @@ class FeederController:
         if 'timers' in self.device.settings:
             while self.timers:
                 self.delete_timer(0, change_settings=False)
-            self.init_timers(self.device.settings['timers']) 
+            self.init_timers() 
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:
