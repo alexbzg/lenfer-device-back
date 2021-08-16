@@ -67,9 +67,7 @@ class FeederController(LenferController):
             and 'timezone' in self.device.settings and self.device.settings['timezone']):
             sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
                 self.device.settings['timezone'])
-            LOG.info(sun.get_sunrise_time())
             sun_data = [time_tuple_to_seconds(sun.get_sunrise_time(), sun=True), time_tuple_to_seconds(sun.get_sunset_time(), sun=True)]
-            LOG.info(sun_data)
         for timer_conf in self.device.settings['timers']:
             timer = self.create_timer(timer_conf)
             if timer.sun:
@@ -81,7 +79,6 @@ class FeederController(LenferController):
             self.timers.append(timer)
             
         self.timers.sort(key=lambda timer: timer.time_on)
-        LOG.info([timer.time_on for timer in self.timers])
 
     def delete_timer(self, timer_idx, change_settings=True):
         self.off(source=self.timers[timer_idx])

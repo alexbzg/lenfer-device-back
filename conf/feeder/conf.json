@@ -4,13 +4,9 @@
             "enabled": true,
             "reverse": 21,
             "buttons": [27, 26],
-            "relay": {
-                "button": null,
-                "pin": 22
-            },
+            "pin": 22,
             "adc": 35,
-            "power_monitor": false,
-            "__power_monitor": {
+            "power_monitor": {
                 "i2c": 0,
                 "shunt_ohms": 0.1
             }
