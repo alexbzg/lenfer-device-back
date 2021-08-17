@@ -79,26 +79,25 @@ class LenferDevice:
             self.server_uri = SERVER_URI
         for led in self.leds.values():
             led.off()
-        for module, module_conf in self._conf['modules'].items():
-            if self.module_enabled(module_conf):
-                try:
-                    if module == 'climate':
-                        from climate import ClimateController
-                        self.modules[module] = ClimateController(self, module_conf)
-                    elif module == 'rtc':
-                        from timers import RtcController
-                        self.modules[module] = RtcController(module_conf, self._conf['i2c'])
-                        self.modules['rtc'].get_time(set_rtc=True)
-                    elif module == 'relays':
-                        from relay import RelaysController
-                        self.modules[module] = RelaysController(self, module_conf)
-                    elif module == 'feeder':
-                        from feeder import FeederController
-                        self.modules[module] = FeederController(self, module_conf)
-                except Exception as exc:
-                    LOG.exc(exc, 'Controller initialization error')
-                    LOG.error(module)
-                    LOG.error(module_conf)
+        if 'rtc' in self._conf['modules'] and self.module_enabled(self._conf['modules']['rtc']):
+            try:
+                from timers import RtcController
+                self.modules['rtc'] = RtcController(self._conf['modules']['rtc'], self._conf['i2c'])
+                self.modules['rtc'].get_time(set_rtc=True)
+            except Exception as exc:
+                LOG.exc(exc, 'RTC initialization error')
+        if 'climate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['climate']):
+            try:
+                from climate import ClimateController
+                self.modules['climate'] = ClimateController(self, self._conf['modules']['climate'])
+            except Exception as exc:
+                LOG.exc(exc, 'Climate initialization error')
+        if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
+            try:
+                from feeder import FeederController
+                self.modules['feeder'] = FeederController(self, self._conf['modules']['feeder'])
+            except Exception as exc:
+                LOG.exc(exc, 'Feeder initialization error')
         self.schedule = load_json('schedule.json')
         if not self.schedule:
             self.schedule = {'hash': None, 'start': None}
