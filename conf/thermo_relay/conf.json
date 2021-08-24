@@ -4,10 +4,7 @@
             "modes": ["feeder"],
             "reverse": false,
             "buttons": false,
-            "relay": {
-                "button": null,
-                "pin": 13
-            },
+            "pin": 13
         },
         "climate": {
             "modes": ["thermo_relay"],
