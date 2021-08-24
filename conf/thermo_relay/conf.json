@@ -15,7 +15,7 @@
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": ["x"]
+                    "sensors_ids": [14]
                 }
             ],
             "switches":  {
@@ -31,10 +31,10 @@
             },
             "light": false,
             "sensors_roles": {
-                "temperature": ["x"]
+                "temperature": [14]
             },
             "sensors_titles": {
-                "x": "низ"
+                "14": "низ"
             },
             "limits": {
                 "temperature": [20, 0.1],
