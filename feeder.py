@@ -5,9 +5,9 @@ import uasyncio
 import utime
 import ulogging
 
-from Suntime import Sun
 
-from lenfer_controller import LenferController
+
+from relay_switch import RelaySwitchController
 from timers import Timer, time_tuple_to_seconds
 from power_monitor import PowerMonitor
 from utils import manage_memory
@@ -19,22 +19,16 @@ class FeederTimer(Timer):
     def _on_off(self):
         uasyncio.get_event_loop().create_task(self.relay.run_for(self.duration))
 
-class FeederController(LenferController):
+class FeederController(RelaySwitchController):
 
     def __init__(self, device, conf):
-        LenferController.__init__(self, device)
+        RelaySwitchController.__init__(self, device)
         self._power_monitor = None
         if conf['power_monitor']: 
             try: 
                 self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
-        self._conf = conf
-        self.pin = Pin(conf['pin'], Pin.OUT)
-        self.pin.off()
-        self._active = {}
-        self.timers = []
-        self.init_timers()
 
         self._log_queue = []
         self._reverse = Pin(conf['reverse'], Pin.OUT)
@@ -58,33 +52,6 @@ class FeederController(LenferController):
         else:
             self.reverse = reverse
             self.on(True, 'manual')
-
-    def init_timers(self):
-        self.timers = []
-        sun_data = None
-        self.time_table = []
-        if ('location' in self.device.settings and self.device.settings['location']
-            and 'timezone' in self.device.settings and self.device.settings['timezone']):
-            sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
-                self.device.settings['timezone'])
-            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time(), sun=True), time_tuple_to_seconds(sun.get_sunset_time(), sun=True)]
-        for timer_conf in self.device.settings['timers']:
-            timer = self.create_timer(timer_conf)
-            if timer.sun:
-                if sun_data:
-                    time_on = sun_data[0 if timer.sun == 1 else 1] + timer.time_on
-                    timer.time_on = time_on
-                else:
-                    continue
-            self.timers.append(timer)
-            
-        self.timers.sort(key=lambda timer: timer.time_on)
-
-    def delete_timer(self, timer_idx, change_settings=True):
-        self.off(source=self.timers[timer_idx])
-        if change_settings:
-            del self.device.settings['timers'][timer_idx]
-        del self.timers[timer_idx]
 
     @property
     def state(self):
@@ -198,10 +165,7 @@ class FeederController(LenferController):
         return self._reverse.value()
 
     def update_settings(self):
-        if 'timers' in self.device.settings:
-            while self.timers:
-                self.delete_timer(0, change_settings=False)
-            self.init_timers() 
+        RelaySwitchController.update_settings(self)
         if 'reverse_threshold' in self.device.settings:
             self._reverse_threshold = self.device.settings['reverse_threshold']
         if 'reverse_duration' in self.device.settings:

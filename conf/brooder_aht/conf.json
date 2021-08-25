@@ -74,6 +74,10 @@
         "rtc": {
             "enabled": true,
             "i2c": 0
+        },
+        "relay_switch": {
+            "pin": 33,
+            "schedule_params": ["light_on", "light_off"]
         }
     },
     "sleep": 750,

@@ -212,18 +212,6 @@ class ClimateController(LenferController):
             if once:
                 break
 
-    def get_schedule_day(self):
-        if self.schedule and 'items' in self.schedule and self.schedule['items'] and 'start' in self.schedule and self.schedule['start']:
-            day_no = 0
-            start = utime.mktime(self.schedule['start'])
-            today = utime.mktime(machine.RTC().datetime())
-            if start < today:
-                day_no = int((today-start)/86400)
-            if day_no >= len(self.schedule['items']):
-                day_no = len(self.schedule['items']) - 1
-            return self.schedule['items'][day_no]
-        else:
-            return None
 
     async def adjust_light(self, once=False):
         while True:
@@ -262,21 +250,21 @@ class ClimateController(LenferController):
         humid = self.data[self.sensors_roles['humidity'][0]]
         temp_limits, humid_limits = None, None
 
-        day = self.get_schedule_day()
+        day = self.device.schedule.current_day()
 
         co2 = self.data[self.sensors_roles['co2'][0]] if 'co2' in self.sensors_roles and self.sensors_roles['co2']\
             else None 
 
         if day:
-            temp_idx = self.get_schedule_param_idx('temperature')
-            temp_delta = self.schedule['params']['delta'][temp_idx]
+            temp_idx = self.device.schedule.param_idx('temperature')
+            temp_delta = self.device.schedule.params['delta'][temp_idx]
             temp_limits = [
                 day[temp_idx] - temp_delta,
                 day[temp_idx] + temp_delta,
             ]
 
-            humid_idx = self.get_schedule_param_idx('humidity')
-            humid_delta = self.schedule['params']['delta'][humid_idx]
+            humid_idx = self.device.schedule.param_idx('humidity')
+            humid_delta = self.device.schedule.params['delta'][humid_idx]
             humid_limits = [
                 day[humid_idx] - humid_delta,
                 day[humid_idx] + humid_delta,

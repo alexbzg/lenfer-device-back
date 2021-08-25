@@ -51,7 +51,6 @@
                     "id": 5
                 }
             },
-            "light": 33,
             "sensors_roles": {
                 "temperature": [2,4,5,12],
                 "humidity": [3],
@@ -74,6 +73,10 @@
         "rtc": {
             "enabled": true,
             "i2c": 0
+        },
+        "relay_switch": {
+            "pin": 33,
+            "schedule_params": ["light_on", "light_off"]
         }
     },
     "sleep": 750,

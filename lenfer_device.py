@@ -13,6 +13,7 @@ import urequests
 
 from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
+from schedule import Schedule
 
 LOG = ulogging.getLogger("Main")
 
@@ -24,11 +25,11 @@ class LenferDevice:
     MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
     def module_enabled(self, module_conf):
-        if 'enabled' in module_conf and module_conf['enabled']:
-            return True
-        if self.mode and 'modes' in module_conf and module_conf['modes'] and self.mode in module_conf['modes']:
-            return True
-        return False
+        if 'enabled' in module_conf and not module_conf['enabled']:
+            return False
+        if self.mode and 'modes' in module_conf and module_conf['modes'] and self.mode not in module_conf['modes']:
+            return False
+        return True
 
     def save_settings(self):
         save_json(self.settings, 'settings.json')
@@ -79,6 +80,9 @@ class LenferDevice:
             self.server_uri = SERVER_URI
         for led in self.leds.values():
             led.off()
+
+        self.schedule = Schedule()
+
         if 'rtc' in self._conf['modules'] and self.module_enabled(self._conf['modules']['rtc']):
             try:
                 from timers import RtcController
@@ -98,9 +102,12 @@ class LenferDevice:
                 self.modules['feeder'] = FeederController(self, self._conf['modules']['feeder'])
             except Exception as exc:
                 LOG.exc(exc, 'Feeder initialization error')
-        self.schedule = load_json('schedule.json')
-        if not self.schedule:
-            self.schedule = {'hash': None, 'start': None}
+        if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
+            try:
+                from relay_switch import RelaySwitchController
+                self.modules['relay_switch'] = RelaySwitchController(self, self._conf['modules']['relay_switch'])
+            except Exception as exc:
+                LOG.exc(exc, 'RelaySwitch initialization error')
 
     def append_log_entries(self, entries):
         tstamp = self.post_tstamp()
@@ -159,20 +166,6 @@ class LenferDevice:
         self._wlan.load_def_conf()
         machine.reset()
 
-    @property
-    def schedule(self):
-        return self._schedule
-
-    @schedule.setter
-    def schedule(self, value):
-        if self._schedule:
-            with open('schedule.json', 'w', encoding="utf-8") as schedule_file:
-                schedule_file.write(ujson.dumps(value))
-        self._schedule = value
-        for ctrl in self.modules.values():
-            if ctrl and hasattr(ctrl, 'schedule'):
-                ctrl.schedule = value
-
     async def blink(self, leds, count, time_ms):
         for co in range(count):
             for led in leds:
@@ -217,7 +210,7 @@ class LenferDevice:
                 updates = await self.srv_post('device_updates', data)
                 if updates:
                     if 'schedule' in updates and updates['schedule']:
-                        self.schedule = updates['schedule']
+                        self.schedule.update(updates['schedule'])
                     if 'props' in updates and updates['props']:
                         self.settings = updates['props']
                         self.save_settings()
@@ -363,8 +356,8 @@ class LenferDevice:
             loop.create_task(self.modules['climate'].read())
             if self.online():
                 loop.create_task(self.post_sensor_data())
-            if self.modules['climate'].light:
-                loop.create_task(self.modules['climate'].adjust_light())                
+        if self.modules['relay_switch']:
+            loop.create_task(self.modules['relay_switch'].adjust_switch())                
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
         for relay_module in ('relays', 'feeder'):
