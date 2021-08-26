@@ -360,9 +360,10 @@ class LenferDevice:
             loop.create_task(self.modules['relay_switch'].adjust_switch())                
         if self.modules['rtc']:
             loop.create_task(self.modules['rtc'].adjust_time())
-        for relay_module in ('relays', 'feeder'):
-            if self.modules[relay_module]:
-                loop.create_task(self.modules[relay_module].check_timers())
+        if self.modules['feeder']:
+            loop.create_task(self.modules['feeder'].check_timers())
+        if self.modules['relay_switch']:
+            loop.create_task(self.modules['relay_switch'].adjust_switch())
         if self.online():
             loop.create_task(self.post_log())
             if 'updates' in self.id and self.id['updates']:

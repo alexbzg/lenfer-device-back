@@ -26,7 +26,6 @@
                 "humid": false,                
                 "air_con": false
             },
-            "light": false,
             "sensors_roles": {
                 "temperature": [14]
             },

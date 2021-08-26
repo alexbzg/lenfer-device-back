@@ -37,11 +37,14 @@ class FeederController(RelaySwitchController):
         self._reverse_duration = device.settings['reverse_duration']
         self._reverse_delay = 2
         self._delay = 0
+        self.flag_pins = None
         if conf['buttons']:
             for idx, pin in enumerate(conf['buttons']):
                 button = Pin(pin, Pin.IN, Pin.PULL_UP)
                 reverse = bool(idx)
                 button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
+        if conf['flag_pins']:
+            self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
 
     def on_button(self, pin, reverse=False):
         print('button {0} {1} {2}'.format(
@@ -107,7 +110,22 @@ class FeederController(RelaySwitchController):
                     expired = timer.time_on - time
                     retries = 0
                     self.on(source=timer)
-                    while expired < timer.duration and retries < 3:
+
+                    def continue_flag():
+                        nonlocal retries, expired
+                        if retries >= 3:
+                            return False
+                        if self._expired_limit and expired > self._expired_limit:
+                            return False    
+                        if timer.duration > 0 and expired > timer.duration:
+                            return False
+                        if self.flag_pins:
+                            flag_pin = self.flag_pins[1 if self.reverse else 0]
+                            if flag_pin.value():
+                                return False
+                        return True
+
+                    while continue_flag():
                         await uasyncio.sleep(1)
                         now = utime.time()
                         current = self._power_monitor.current() if self._power_monitor else None
