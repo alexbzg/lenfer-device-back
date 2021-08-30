@@ -57,6 +57,10 @@ class LenferDevice:
         self.log_queue = []
         self._conf = load_json('conf.json')
         self.settings = load_json('settings.json')
+        self._modem = None
+        if 'gsm_modem' in self._conf and self._conf['gsm_modem']:
+            from gsm_modem import GsmModem
+            self._modem = GsmModem(self._conf['gsm_modem'])
         if not self.settings:
             self.load_def_settings()
         if 'mode' in self.settings and self.settings['mode']:
@@ -284,7 +288,10 @@ class LenferDevice:
             data['token'] = self.id['token']
             manage_memory()
             self.WDT.feed()
-            rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
+            if (self._modem):
+                rsp = self._modem.post(self.server_uri + url, data)
+            else:
+                rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
             if rsp.status_code != 200:
                 raise Exception(rsp.reason)
             self.status['srv_last_contact'] = utime.time()
@@ -304,10 +311,10 @@ class LenferDevice:
                 self.WDT.feed()
             self.status['srv_req_pending'] = False
         if rsp:
-            if raw:
+            if raw and not self._modem:
                 return rsp.raw
             try:
-                result = ujson.load(rsp.raw)
+                result = ujson.load(rsp.content if self._modem else rsp.raw)
             except Exception as exc:
                 LOG.exc(exc, 'Server response reading error')
                 print(rsp.raw.read())

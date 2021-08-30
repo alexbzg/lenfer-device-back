@@ -13,6 +13,11 @@ LOG = ulogging.getLogger("Main")
 UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
 
+GSM_MODEM = None
+CONF = load_json('conf.json')
+if not CONF:
+    CONF = {}
+
 def updates_url():
     id_data = load_json('id.json')
     if 'debug' in id_data and id_data['debug']:
@@ -47,10 +52,20 @@ def check_software_update():
     return srv_versions and device_type in srv_versions and version_data['hash'] != srv_versions[device_type]
 
 def load_srv_json(file, srv_url=None):
+    global GSM_MODEM
     if not srv_url:
         srv_url = updates_url()
+    file_url = srv_url + file + '.json'
     try:
-        return ujson.load(urequests.get(srv_url + file + '.json').raw)
+        content = ''
+        if 'gsm_modem' in CONF and CONF['gsm_modem']:
+            if not GSM_MODEM:
+                from gsm_modem import GsmModem
+                GSM_MODEM = GsmModem(CONF['gsm_modem'])
+            content = GSM_MODEM.get(file_url).content
+        else:
+            content = urequests.get(file_url).raw
+        return ujson.load(content)
     except Exception as exc:
         LOG.exc(exc, 'Error loading server data: %s' % file)
         return None
