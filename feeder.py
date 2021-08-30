@@ -122,6 +122,7 @@ class FeederController(RelaySwitchController):
                         if self.flag_pins:
                             flag_pin = self.flag_pins[1 if self.reverse else 0]
                             if flag_pin.value():
+                                self.device.append_log_entries("Feeder task success")
                                 return False
                         return True
 
