@@ -34,5 +34,15 @@ class Schedule:
     def params(self):
         return self._schedule['params']
 
+    @property
+    def hash(self):
+        return self._schedule['hash']
+
+    @property
+    def start(self):
+        return self._schedule['start']
+    
+
+
 
 

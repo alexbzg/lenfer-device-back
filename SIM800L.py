@@ -12,7 +12,7 @@ except:
         import logger
     except:
         class Logger(object):
-            level = 'INFO'
+            level = 'DEBUG'
             @classmethod
             def debug(cls, text):
                 if cls.level == 'DEBUG': print('DEBUG:', text)
@@ -38,7 +38,7 @@ class Response(object):
 
 class Modem(object):
 
-    def __init__(self, uart=None, MODEM_PWKEY_PIN=None, MODEM_RST_PIN=None, MODEM_POWER_ON_PIN=None, MODEM_TX_PIN=None, MODEM_RX_PIN=None):
+    def __init__(self, uart=None, MODEM_PWKEY_PIN=4, MODEM_RST_PIN=5, MODEM_POWER_ON_PIN=23, MODEM_TX_PIN=26, MODEM_RX_PIN=27):
 
         # Pins
         self.MODEM_PWKEY_PIN    = MODEM_PWKEY_PIN
@@ -126,7 +126,7 @@ class Modem(object):
                     'setpwd':     {'string':'AT+SAPBR=3,1,"PWD","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'initgprs':   {'string':'AT+SAPBR=3,1,"Contype","GPRS"', 'timeout':3, 'end': 'OK'}, # Appeared on hologram net here or below
                     'opengprs':   {'string':'AT+SAPBR=1,1', 'timeout':3, 'end': 'OK'},
-                    'getbear':    {'string':'AT+SAPBR=2,1', 'timeout':3, 'end': 'OK'},
+                    'getbear':    {'string':'AT+SAPBR=2,1', 'timeout':5, 'end': 'OK'},
                     'inithttp':   {'string':'AT+HTTPINIT', 'timeout':3, 'end': 'OK'},
                     'sethttp':    {'string':'AT+HTTPPARA="CID",1', 'timeout':3, 'end': 'OK'},
                     'checkssl':   {'string':'AT+CIPSSL=?', 'timeout': 3, 'end': 'OK'},

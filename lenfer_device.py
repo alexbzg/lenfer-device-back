@@ -66,14 +66,15 @@ class LenferDevice:
         if 'mode' in self.settings and self.settings['mode']:
             self.mode = self.settings['mode']
 
-        wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
-        wlan_switch_button.irq(self.wlan_switch_irq)
+        if 'wlan_switch' in self._conf and self._conf['wlan_switch']:
+            wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
+            wlan_switch_button.irq(self.wlan_switch_irq)
 
         if 'factory_reset' in self._conf and self._conf['factory_reset']:
             factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
             factory_reset_button.irq(self.factory_reset_irq)
 
-        self.modules = {item: None for item in LenferDevice.MODULES_LIST}
+        self.modules = {}
         self.i2c = [SoftI2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
             for i2c_conf in self._conf['i2c']]
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self._conf['leds'].items()}
@@ -112,6 +113,7 @@ class LenferDevice:
                 self.modules['relay_switch'] = RelaySwitchController(self, self._conf['modules']['relay_switch'])
             except Exception as exc:
                 LOG.exc(exc, 'RelaySwitch initialization error')
+        LOG.info(self.modules)
 
     def append_log_entries(self, entries):
         tstamp = self.post_tstamp()
@@ -206,8 +208,8 @@ class LenferDevice:
             try:
                 data = {
                     'schedule': {
-                        'hash': self.schedule['hash'],
-                        'start': self.schedule['start']
+                        'hash': self.schedule.hash,
+                        'start': self.schedule.start
                     },
                     'props': self.settings
                 }
@@ -314,18 +316,19 @@ class LenferDevice:
             if raw and not self._modem:
                 return rsp.raw
             try:
-                result = ujson.load(rsp.content if self._modem else rsp.raw)
+                result = ujson.loads(rsp.content) if self._modem else ujson.load(rsp.raw)
             except Exception as exc:
                 LOG.exc(exc, 'Server response reading error')
-                print(rsp.raw.read())
+                print(rsp.content if self._modem else rsp.raw.read())
             finally:
-                rsp.close()
+                if not self._modem:
+                    rsp.close()
                 rsp = None
         manage_memory()
         return result
 
     def online(self):
-        return 'id' in self.id and self.id['id'] and self._wlan.online()
+        return 'id' in self.id and self.id['id'] and (self._modem or self._wlan.online())
 
     def deepsleep(self):
         return 'deepsleep' in self.settings and self.settings['deepsleep']
@@ -333,23 +336,24 @@ class LenferDevice:
     def start(self):
         self.WDT = WDT(timeout=60000)        
         if self.deepsleep():
-            if self.modules['rtc']:
-                uasyncio.run(self.modules['rtc'].adjust_time(once=True))
-                self.WDT.feed()
-            if self.modules['climate']:
-                uasyncio.run(self.modules['climate'].read(once=True))
-                self.WDT.feed()
+            for module_type in self.modules:
+                if module_type == 'rtc':
+                    uasyncio.run(self.modules['rtc'].adjust_time(once=True))
+                    self.WDT.feed()
+                elif module_type == 'climate':
+                    uasyncio.run(self.modules['climate'].read(once=True))
+                    self.WDT.feed()
+                    if self.online():
+                        uasyncio.run(self.post_sensor_data(once=True))
+                    if self.modules['climate'].light:
+                        uasyncio.run(self.modules['climate'].adjust_light(once=True))                
                 if self.online():
-                    uasyncio.run(self.post_sensor_data(once=True))
-                if self.modules['climate'].light:
-                    uasyncio.run(self.modules['climate'].adjust_light(once=True))                
-            if self.online():
-                if 'updates' in self.id and self.id['updates']:
-                    uasyncio.run(self.check_updates(once=True))
-                if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
-                    uasyncio.run(self.task_check_software_updates(once=True))
-            if self.deepsleep():
-                machine.deepsleep(self.deepsleep()*60000)
+                    if 'updates' in self.id and self.id['updates']:
+                        uasyncio.run(self.check_updates(once=True))
+                    if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
+                        uasyncio.run(self.task_check_software_updates(once=True))
+                if self.deepsleep():
+                    machine.deepsleep(self.deepsleep()*60000)
                 
         self.start_async()
 
@@ -359,18 +363,19 @@ class LenferDevice:
         loop.create_task(self.check_wlan_switch())
         if self._wlan.mode == network.AP_IF and self._wlan.conf['ssid']:
             loop.create_task(self.delayed_ssid_switch())
-        if self.modules['climate']:
-            loop.create_task(self.modules['climate'].read())
-            if self.online():
-                loop.create_task(self.post_sensor_data())
-        if self.modules['relay_switch']:
-            loop.create_task(self.modules['relay_switch'].adjust_switch())                
-        if self.modules['rtc']:
-            loop.create_task(self.modules['rtc'].adjust_time())
-        if self.modules['feeder']:
-            loop.create_task(self.modules['feeder'].check_timers())
-        if self.modules['relay_switch']:
-            loop.create_task(self.modules['relay_switch'].adjust_switch())
+        for module_type in self.modules:
+            if module_type == 'climate':
+                loop.create_task(self.modules['climate'].read())
+                if self.online():
+                    loop.create_task(self.post_sensor_data())
+            elif module_type =='relay_switch':
+                loop.create_task(self.modules['relay_switch'].adjust_switch())                
+            elif module_type == 'rtc':
+                loop.create_task(self.modules['rtc'].adjust_time())
+            elif module_type == 'feeder':
+                loop.create_task(self.modules['feeder'].check_timers())
+            elif module_type == 'relay_switch':
+                loop.create_task(self.modules['relay_switch'].adjust_switch())
         if self.online():
             loop.create_task(self.post_log())
             if 'updates' in self.id and self.id['updates']:

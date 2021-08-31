@@ -9,30 +9,21 @@ class GsmModem:
 
     def __init__(self, conf):
 
-        self._modem = Modem(**conf['pins'])
+        self._modem = Modem()
         self._apn = conf['apn']
-        self.connected = False
+        self._modem.initialize()
+        self.connect()
 
     def connect(self):
-
-        retries = 0
-        while not self.connected and retries < 3:
-            try:
-                # Initialize the modem
-                self._modem.initialize()
-
-                # Connect the modem
-                self._modem.connect(**self['apn'])
-                self.connected = True
-            except Exception as exc:
-                LOG.exc(exc, 'GSM connection error')
-                retries += 1
-        return self.connected
+        try:
+            self._modem.connect(**self._apn)
+            return True
+        except Exception as exc:
+            LOG.exc(exc, 'GSM connect error')
+        return False
     
     def request(self, url, method='GET', data=None):
-        
-        if self.connected or self.connect():
-
+        if self.connect():
             return self._modem.http_request(url, method, ujson.dumps(data))
 
     def get(self, url):
