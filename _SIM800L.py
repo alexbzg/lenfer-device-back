@@ -1,5 +1,5 @@
 
-# Imports
+import re
 import utime as time
 import ujson as json
 
@@ -28,6 +28,8 @@ except:
 class GenericATError(Exception):
     pass
 
+class ReadTimeoutException(Exception):
+    pass
 
 class Response(object):
 
@@ -38,7 +40,7 @@ class Response(object):
 
 class Modem(object):
 
-    def __init__(self, uart=None, MODEM_PWKEY_PIN=None, MODEM_RST_PIN=None, MODEM_POWER_ON_PIN=None, MODEM_TX_PIN=None, MODEM_RX_PIN=None):
+    def __init__(self, uart=None, MODEM_PWKEY_PIN=4, MODEM_RST_PIN=5, MODEM_POWER_ON_PIN=23, MODEM_TX_PIN=26, MODEM_RX_PIN=27):
 
         # Pins
         self.MODEM_PWKEY_PIN    = MODEM_PWKEY_PIN
@@ -110,8 +112,7 @@ class Modem(object):
     #----------------------
     # Execute AT commands
     #----------------------
-    def execute_at_command(self, command, data=None, clean_output=True, binary_output=False):
-
+    def execute_at_command(self, command, data=None, clean_output=True, buf_size=None, yield_buf=False, binary_output=False):
         # Commands dictionary. Not the best approach ever, but works nicely.
         commands = {
                     'modeminfo':  {'string':'ATI', 'timeout':3, 'end': 'OK'},
@@ -126,14 +127,14 @@ class Modem(object):
                     'setpwd':     {'string':'AT+SAPBR=3,1,"PWD","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'initgprs':   {'string':'AT+SAPBR=3,1,"Contype","GPRS"', 'timeout':3, 'end': 'OK'}, # Appeared on hologram net here or below
                     'opengprs':   {'string':'AT+SAPBR=1,1', 'timeout':3, 'end': 'OK'},
-                    'getbear':    {'string':'AT+SAPBR=2,1', 'timeout':3, 'end': 'OK'},
+                    'getbear':    {'string':'AT+SAPBR=2,1', 'timeout':5, 'end': 'OK'},
                     'inithttp':   {'string':'AT+HTTPINIT', 'timeout':3, 'end': 'OK'},
                     'sethttp':    {'string':'AT+HTTPPARA="CID",1', 'timeout':3, 'end': 'OK'},
                     'checkssl':   {'string':'AT+CIPSSL=?', 'timeout': 3, 'end': 'OK'},
                     'enablessl':  {'string':'AT+HTTPSSL=1', 'timeout':3, 'end': 'OK'},
                     'disablessl': {'string':'AT+HTTPSSL=0', 'timeout':3, 'end': 'OK'},
                     'initurl':    {'string':'AT+HTTPPARA="URL","{}"'.format(data), 'timeout':3, 'end': 'OK'},
-                    'doget':      {'string':'AT+HTTPACTION=0', 'timeout':100, 'end': '+HTTPACTION'},
+                    'doget':      {'string':'AT+HTTPACTION=0', 'timeout':3, 'end': '+HTTPACTION'},
                     'setcontent': {'string':'AT+HTTPPARA="CONTENT","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'postlen':    {'string':'AT+HTTPDATA={},5000'.format(data), 'timeout':3, 'end': 'DOWNLOAD'},  # "data" is data_lenght in this context, while 5000 is the timeout
                     'dumpdata':   {'string':data, 'timeout':1, 'end': 'OK'},
@@ -155,76 +156,25 @@ class Modem(object):
 
         # Support vars
         command_string  = commands[command]['string']
-        excpected_end   = commands[command]['end']
+        expected_end   = commands[command]['end']
         timeout         = commands[command]['timeout']
-        processed_lines = 0
+        #processed_lines = 0
 
         # Execute the AT command
         command_string_for_at = "{}\r\n".format(command_string)
         logger.debug('Writing AT command "{}"'.format(command_string_for_at.encode('utf-8')))
         self.uart.write(command_string_for_at)
 
-        # Support vars
-        pre_end = True
-        output  = b'' if binary_output else ''
-        empty_reads = 0
-
-        while True:
-
-            line = self.uart.readline()
-            if not line:
-                time.sleep(1)
-                empty_reads += 1
-                if empty_reads > timeout:
-                    raise Exception('Timeout for command "{}" (timeout={})'.format(command, timeout))
-                    #logger.warning('Timeout for command "{}" (timeout={})'.format(command, timeout))
-                    #break
-            else:
-                logger.debug('Read "{}"'.format(line if len(line) < 100 else '--- LONG LINE ---c'))
-
-                # Convert line to string
-                line_str = ''
-                try:
-                    line_str = line.decode('utf-8')
-                except UnicodeError as exc:
-                    if not binary_output:
-                        raise exc
-
-                # Do we have an error?
-                if line_str == 'ERROR\r\n':
-                    raise GenericATError('Got generic AT error')
-
-                # If we had a pre-end, do we have the expected end?
-                if line_str == '{}\r\n'.format(excpected_end):
-                    logger.debug('Detected exact end')
-                    break
-                if pre_end and line_str.startswith('{}'.format(excpected_end)):
-                    logger.debug('Detected startwith end (and adding this line to the output too)')
-                    output += line_str
-                    break
-
-                # Do we have a pre-end?
-                if line_str == '\r\n':
-                    pre_end = True
-                    logger.debug('Detected pre-end')
-                else:
-                    pre_end = False
-
-                # Keep track of processed lines and stop if exceeded
-                processed_lines+=1
-
-                # Save this line unless in particular conditions
-                if command == 'getdata' and line_str.startswith('+HTTPREAD:'):
-                    pass
-                else:
-                    output += line if binary_output else line_str
-
-        # Remove the command string from the output        
-        output = output.replace(bytes(command_string, 'utf-8') + b'\r\r\n', b'') if binary_output else \
-            output.replace(command_string+'\r\r\n', '')
+        if yield_buf:
+            return self.read_at_response(command_string, expected_end, timeout, buf_size, binary_output)
+        output = b'' if binary_output else '' 
+        for buf in self.read_at_response(command_string, expected_end, timeout, buf_size, binary_output):
+            output += buf
+        # Remove the command string from the output
+        #output = output.replace(command_string+'\r\r\n', '')
 
         # ..and remove the last \r\n added by the AT protocol
-        if output.endswith(b'\r\n' if binary_output else '\r\n'):
+        if output.endswith('\r\n'):
             output = output[:-2]
 
         # Also, clean output if needed
@@ -236,8 +186,60 @@ class Modem(object):
             if output.endswith('\n'):
                 output = output[:-1]
 
+        logger.debug('Returning "{}"'.format(output.encode('utf8')))
+
         # Return
         return output
+
+    def read_at_response(self, command_string, expected_end, timeout, buf_size=None, binary_output=False):
+        # Support vars
+        prev_line = b''
+
+        def read_line():
+            empty_reads = 0
+            line = self.uart.read(buf_size) if buf_size else self.uart.readline()
+            logger.debug('Read "{}"'.format(line))
+            if not line:
+                time.sleep(1)
+                empty_reads += 1
+                if empty_reads > timeout:
+                    if buf_size:
+                        return line
+                    else:
+                        raise ReadTimeoutException()
+            return line
+
+        line = read_line().replace(bytes(command_string, 'utf-8') + b'\r\r\n', b'')
+        
+        while True:
+            break_flag = False
+            test_line = prev_line + line
+            # Do we have an error?
+            if b'ERROR\r\n' in test_line:
+                raise GenericATError('Got generic AT error')
+
+                # If we had a pre-end, do we have the expected end?
+            if test_line.endswith(bytes(expected_end, 'utf-8') + b'\r\n'):
+                logger.debug('Detected exact end')
+                line = line.replace(bytes(expected_end, 'utf-8') + b'\r\n', b'')
+                break_flag = True
+            if b'\r\n' + bytes(expected_end, 'utf-8') in test_line:
+                logger.debug('Detected startwith end (and adding this line to the output too)')
+                break_flag = True
+
+            if command_string == 'AT+HTTPREAD' and b'+HTTPREAD:' in line:
+                line = re.sub(b'\+HTTPREAD: \d+\r\n', b'', line)
+                
+            yield line if binary_output else line.decode('utf-8')
+
+            if break_flag:
+                break
+
+            prev_line = line
+            line = read_line()
+            if not line:
+                line = b''
+
 
 
     #----------------------
@@ -355,7 +357,7 @@ class Modem(object):
             raise Exception('Error, we should be disconnected but we still have an IP address ({})'.format(ip_addr))
 
 
-    def http_request(self, url, mode='GET', data=None, content_type='application/json', binary_output=False):
+    def http_request(self, url, mode='GET', data=None, content_type='application/json', buf_size=None, yield_buf=False, binary_output=False):
 
         # Protocol check.
         assert url.startswith('http'), 'Unable to handle communication protocol for URL "{}"'.format(url)
@@ -413,6 +415,7 @@ class Modem(object):
 
             logger.debug('Http request step #2.5 (dopost)')
             output = self.execute_at_command('dopost')
+            logger.debug('Http output: "{}"'.format(output))
             response_status_code = output.split(',')[1]
             logger.debug('Response status code: "{}"'.format(response_status_code))
 
@@ -422,7 +425,12 @@ class Modem(object):
 
         # Third, get data
         logger.debug('Http request step #4 (getdata)')
-        response_content = self.execute_at_command('getdata', clean_output=False, binary_output=binary_output)
+        response_content = self.execute_at_command('getdata', clean_output=False, buf_size=buf_size, yield_buf=yield_buf)
+
+        if yield_buf:
+            return response_content
+
+        logger.debug(response_content)
 
         # Then, close the http context
         logger.debug('Http request step #4 (closehttp)')

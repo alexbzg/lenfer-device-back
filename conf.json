@@ -41,7 +41,7 @@
     "factory_reset": null,
     "wlan_switch": null,
     "gsm_modem": {
-        "_pins": {
+        "pins": {
             "MODEM_PWKEY_PIN": 4,
             "MODEM_RST_PIN": 5,
             "MODEM_POWER_ON_PIN": 23,

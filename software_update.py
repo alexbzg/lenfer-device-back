@@ -6,17 +6,14 @@ import ulogging
 import urequests
 
 from utils import load_json, save_json, manage_memory
-
+from http_client import HttpClient
 
 LOG = ulogging.getLogger("Main")
 
 UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
 
-GSM_MODEM = None
-CONF = load_json('conf.json')
-if not CONF:
-    CONF = {}
+HTTP_CLIENT = HttpClient()
 
 def updates_url():
     id_data = load_json('id.json')
@@ -52,20 +49,11 @@ def check_software_update():
     return srv_versions and device_type in srv_versions and version_data['hash'] != srv_versions[device_type]
 
 def load_srv_json(file, srv_url=None):
-    global GSM_MODEM
     if not srv_url:
         srv_url = updates_url()
     file_url = srv_url + file + '.json'
     try:
-        content = ''
-        if 'gsm_modem' in CONF and CONF['gsm_modem']:
-            if not GSM_MODEM:
-                from gsm_modem import GsmModem
-                GSM_MODEM = GsmModem(CONF['gsm_modem'])
-            content = GSM_MODEM.get(file_url).content
-        else:
-            content = urequests.get(file_url).raw
-        return ujson.load(content)
+        return HTTP_CLIENT.get_json(file_url)
     except Exception as exc:
         LOG.exc(exc, 'Error loading server data: %s' % file)
         return None
@@ -79,7 +67,7 @@ def schedule_software_update():
     machine.reset()
 
 def perform_software_update():
-    wdt = machine.WDT(timeout=20000)
+    wdt = machine.WDT(timeout=20*60*1000)
     manage_memory()
     version_data = load_version()
     device_type = get_device_type()
@@ -97,9 +85,9 @@ def perform_software_update():
             local_path = entry['path'] if 'path' in entry else path
             print(local_path)
             ensure_file_path(local_path)
-            with open(local_path, 'wb') as local_file:
-                file_url = srv_url + 'software/' + path
-                print(file_url)
+            file_url = srv_url + 'software/' + path
+            print(file_url)
+
                 rsp = urequests.get(file_url)
                 if rsp:
                     wdt.feed()

@@ -9,7 +9,7 @@ class GsmModem:
 
     def __init__(self, conf):
 
-        self._modem = Modem()
+        self._modem = Modem(**conf['pins'])
         self._apn = conf['apn']
         self._modem.initialize()
         self.connect()
@@ -22,12 +22,14 @@ class GsmModem:
             LOG.exc(exc, 'GSM connect error')
         return False
     
-    def request(self, url, method='GET', data=None):
+    def request(self, url, method='GET', data=None, binary_output=False):
         if self.connect():
-            return self._modem.http_request(url, method, ujson.dumps(data))
+            json_data = ujson.dumps(data) if data else None
+            return self._modem.http_request(url, method, data=json_data, binary_output=binary_output)
 
-    def get(self, url):
-        return self.request(url)
+
+    def get(self, url, binary_output=False):
+        return self.request(url, binary_output=binary_output)
 
     def post(self, url, data=None):
         return self.request(url, 'POST', data)

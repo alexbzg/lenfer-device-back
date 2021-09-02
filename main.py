@@ -1,5 +1,6 @@
 import gc
 import re
+import sys
 
 import uasyncio
 import machine
@@ -12,6 +13,8 @@ from wlan import WlanController
 from lenfer_device import LenferDevice
 from software_update import load_version, perform_software_update
 from utils import manage_memory
+
+sys.exit()
 
 APP = picoweb.WebApp(__name__)
 
