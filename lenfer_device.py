@@ -14,6 +14,7 @@ import urequests
 from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
 from schedule import Schedule
+from http_client import HttpClient
 
 LOG = ulogging.getLogger("Main")
 
@@ -51,16 +52,12 @@ class LenferDevice:
             "wlan_switch": False,
             "ssid_failure": False,
             "ssid_delay": False,
-            "srv_req_pending": False,
-            "srv_last_contact": utime.time()
+            "srv_req_pending": False
             }
         self.log_queue = []
         self._conf = load_json('conf.json')
         self.settings = load_json('settings.json')
-        self._modem = None
-        if 'gsm_modem' in self._conf and self._conf['gsm_modem']:
-            from gsm_modem import GsmModem
-            self._modem = GsmModem(self._conf['gsm_modem'])
+        self._http = HttpClient()
         if not self.settings:
             self.load_def_settings()
         if 'mode' in self.settings and self.settings['mode']:
@@ -215,6 +212,7 @@ class LenferDevice:
                 }
                 updates = await self.srv_post('device_updates', data)
                 if updates:
+                    LOG.info(updates)
                     if 'schedule' in updates and updates['schedule']:
                         self.schedule.update(updates['schedule'])
                     if 'props' in updates and updates['props']:
@@ -279,56 +277,19 @@ class LenferDevice:
             time_tuple = machine.RTC().datetime()
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
 
-    async def srv_post(self, url, data, raw=False):        
-        while self.status['srv_req_pending']:
-            await uasyncio.sleep_ms(50)
-        self.status['srv_req_pending'] = True
-        rsp = None
-        result = None
-        try:
-            data['device_id'] = self.id['id']
-            data['token'] = self.id['token']
-            manage_memory()
+    async def srv_post(self, url, data):        
+        data['device_id'] = self.id['id']
+        data['token'] = self.id['token']
+        manage_memory()
+        self.WDT.feed()
+        result = await self._http.post(self.server_uri + url, data)
+        if hasattr(self, 'WDT'):
             self.WDT.feed()
-            if (self._modem):
-                rsp = self._modem.post(self.server_uri + url, data)
-            else:
-                rsp = urequests.post(self.server_uri + url, json=data, parse_headers=False)
-            if rsp.status_code != 200:
-                raise Exception(rsp.reason)
-            self.status['srv_last_contact'] = utime.time()
-        except OSError as exc:
-            LOG.exc(exc, 'Data posting error')
-            LOG.error("URL: %s", self.server_uri + url)
-            LOG.error("data: %s", data)
-            if utime.time() - self.status['srv_last_contact'] > 1800:
-                LOG.error("server unreachable for 30 minutes: reboot")
-                machine.reset()
-        except Exception as exc:
-            LOG.exc(exc, 'Data posting error')
-            LOG.error("URL: %s", self.server_uri + url)
-            LOG.error("data: %s", data)
-        finally:
-            if hasattr(self, 'WDT'):
-                self.WDT.feed()
-            self.status['srv_req_pending'] = False
-        if rsp:
-            if raw and not self._modem:
-                return rsp.raw
-            try:
-                result = ujson.loads(rsp.content) if self._modem else ujson.load(rsp.raw)
-            except Exception as exc:
-                LOG.exc(exc, 'Server response reading error')
-                print(rsp.content if self._modem else rsp.raw.read())
-            finally:
-                if not self._modem:
-                    rsp.close()
-                rsp = None
         manage_memory()
         return result
 
     def online(self):
-        return 'id' in self.id and self.id['id'] and (self._modem or self._wlan.online())
+        return 'id' in self.id and self.id['id'] and (self._http._modem or self._wlan.online())
 
     def deepsleep(self):
         return 'deepsleep' in self.settings and self.settings['deepsleep']

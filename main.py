@@ -14,8 +14,6 @@ from lenfer_device import LenferDevice
 from software_update import load_version, perform_software_update
 from utils import manage_memory
 
-sys.exit()
-
 APP = picoweb.WebApp(__name__)
 
 LOG = ulogging.getLogger("Main")

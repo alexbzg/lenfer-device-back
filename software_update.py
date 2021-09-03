@@ -1,6 +1,7 @@
 import ujson
 import machine
 import uos
+import machine
 
 import ulogging
 import urequests
@@ -87,21 +88,12 @@ def perform_software_update():
             ensure_file_path(local_path)
             file_url = srv_url + 'software/' + path
             print(file_url)
-
-                rsp = urequests.get(file_url)
-                if rsp:
-                    wdt.feed()
-                    buf = rsp.raw.read(1024)
-                    while buf:
-                        wdt.feed()
-                        local_file.write(buf)
-                        buf = rsp.raw.read(1024)
-                    if version_data['hash']:
-                        version_data['hash'] = None
-                    version_data['files'][path] = entry['hash']
-                    save_version(version_data)
-                    rsp.close()
-                    print('complete')
+            if HTTP_CLIENT.get_to_file(file_url, local_path):
+                if version_data['hash']:
+                    version_data['hash'] = None
+                version_data['files'][path] = entry['hash']
+                save_version(version_data)
+                print('complete')
         wdt.feed()
         version_data['hash'] = srv_versions[device_type]
         version_data['update'] = False
