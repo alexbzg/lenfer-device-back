@@ -225,6 +225,8 @@ class LenferDevice:
                         machine.reset()                    
                     if 'mode' in self.settings and self.mode != self.settings['mode']:
                         machine.reset()
+                elif once:
+                    machine.reset()
             except Exception as exc:
                 LOG.exc(exc, 'Server updates check error')
             manage_memory()
@@ -244,7 +246,9 @@ class LenferDevice:
                         data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                             for _id, value in ctrl.data.items()]
                 if data['data']:
-                    await self.srv_post('sensors_data', data)
+                    rsp = await self.srv_post('sensors_data', data)
+                    if once and not rsp:
+                        machine.reset()
                 data = {'data': []}
                 tstamp = self.post_tstamp()
                 for ctrl in self.modules.values():

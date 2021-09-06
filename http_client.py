@@ -86,7 +86,7 @@ class HttpClient:
         while self._srv_req_pending:
             await uasyncio.sleep_ms(50)
         rsp = None
-        rsp = None
+        result = None
         try:
             if (self._modem):
                 data = ujson.dumps(data) if data else None

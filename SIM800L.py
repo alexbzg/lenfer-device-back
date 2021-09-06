@@ -137,7 +137,7 @@ class Modem(object):
                     'setcontent': {'string':'AT+HTTPPARA="CONTENT","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'postlen':    {'string':'AT+HTTPDATA={},5000'.format(data), 'timeout':3, 'end': 'DOWNLOAD'},  # "data" is data_lenght in this context, while 5000 is the timeout
                     'dumpdata':   {'string':data, 'timeout':1, 'end': 'OK'},
-                    'dopost':     {'string':'AT+HTTPACTION=1', 'timeout':3, 'end': '+HTTPACTION'},
+                    'dopost':     {'string':'AT+HTTPACTION=1', 'timeout':10, 'end': '+HTTPACTION'},
                     'getdata':    {'string':'AT+HTTPREAD', 'timeout':3, 'end': 'OK'},
                     'closehttp':  {'string':'AT+HTTPTERM', 'timeout':3, 'end': 'OK'},
                     'closebear':  {'string':'AT+SAPBR=0,1', 'timeout':3, 'end': 'OK'}

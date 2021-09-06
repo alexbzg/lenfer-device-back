@@ -14,7 +14,7 @@ LOG = ulogging.getLogger("Main")
 UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
 
-HTTP_CLIENT = HttpClient()
+HTTP_CLIENT = None
 
 def updates_url():
     id_data = load_json('id.json')
@@ -50,10 +50,13 @@ def check_software_update():
     return srv_versions and device_type in srv_versions and version_data['hash'] != srv_versions[device_type]
 
 def load_srv_json(file, srv_url=None):
+    global HTTP_CLIENT
     if not srv_url:
         srv_url = updates_url()
     file_url = srv_url + file + '.json'
     try:
+        if not HTTP_CLIENT:
+            HTTP_CLIENT = HttpClient()
         return HTTP_CLIENT.get_json(file_url)
     except Exception as exc:
         LOG.exc(exc, 'Error loading server data: %s' % file)
@@ -68,6 +71,9 @@ def schedule_software_update():
     machine.reset()
 
 def perform_software_update():
+    global HTTP_CLIENT
+    if not HTTP_CLIENT:
+        HTTP_CLIENT = HttpClient()
     wdt = machine.WDT(timeout=20*60*1000)
     manage_memory()
     version_data = load_version()
