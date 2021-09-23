@@ -1,27 +1,37 @@
+import sys
 import gc
 import re
-import sys
 
-import uasyncio
+import lib.uasyncio as uasyncio
 import machine
 import ujson
-import ulogging
+import lib.ulogging as ulogging
+import sys
 
-import picoweb
+import lib.picoweb as picoweb
 
-from wlan import WlanController
+from network_controller import NetworkController
 from lenfer_device import LenferDevice
 from software_update import load_version, perform_software_update
-from utils import manage_memory
+from utils import manage_memory, load_json
 
 APP = picoweb.WebApp(__name__)
 
 LOG = ulogging.getLogger("Main")
 LOG.setLevel(ulogging.DEBUG)
 
-WLAN = WlanController()
+LOOP = uasyncio.get_event_loop()
 
-if WLAN.online():
+async def wdt_feed():
+    await uasyncio.sleep(10)
+    machine.resetWDT()
+
+LOOP.create_task(wdt_feed())
+machine.WDT(True)
+
+NETWORK_CONTROLLER = NetworkController()
+
+if NETWORK_CONTROLLER.online():
     software_version = load_version()
     if software_version['update']:
         perform_software_update()
@@ -29,76 +39,20 @@ if WLAN.online():
 
 manage_memory()
 
-DEVICE = LenferDevice(WLAN)
+DEVICE = LenferDevice(NETWORK_CONTROLLER)
 
 async def send_json(rsp, data):
     await picoweb.start_response(rsp, 'application/json', "200", {'cache-control': 'no-store'})
     await rsp.awrite(ujson.dumps(data).encode('UTF-8'))
     gc.collect()
 
-@APP.route('/api/climate/limits')
-async def limits(req, rsp):
-    ctrl = DEVICE.modules['climate']
-    if ctrl:
-        if req.method == "POST":
-            req_json = req.read_json()
-            ctrl.limits.update(req_json)
-            DEVICE.save_settings()
-        await send_json(rsp, ctrl.limits)
-
-@APP.route(re.compile(r'/api/(\w+)/sensors/info'))
-async def get_sensors_info(req, rsp):
-    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
-    ctrl = DEVICE.modules[ctrl_type]
-    if ctrl and hasattr(ctrl, 'sensors_roles'): 
-        await send_json(rsp, [
-            {'type': _type,
-             'limits': ctrl.limits[_type],
-             'sensors': [
-                 {'id': _id, 'title': ctrl.sensors_titles[str(_id)]}
-                 for _id in sensors
-             ]} for _type, sensors in ctrl.sensors_roles.items()
-        ])
-    else:
-        gc.collect()
-
-def get_ctrl(req):
-    ctrl_type = picoweb.utils.unquote_plus(req.url_match.group(1))
-    return DEVICE.modules[ctrl_type]
-
-@APP.route(re.compile(r'/api/(\w+)/sensors/data'))
-async def get_sensors_data(req, rsp):
-    ctrl = get_ctrl(req)
-    if ctrl and hasattr(ctrl, 'data'):
-        await send_json(rsp, {str(_id): value  for _id, value in ctrl.data.items()})
-    else:
-        gc.collect()
-
-@APP.route(re.compile(r'/api/(\w+)/timers'))
-async def timers(req, rsp):
-    ctrl = get_ctrl(req)
-    if ctrl:
-        if req.method == 'POST' or req.method == 'DELETE':
-            req_json = req.json()
-            if req.method == 'POST':
-                for key in req_json.keys():
-                    timer_conf = req_json[key]
-                    if key == '-1':
-                        ctrl.add_timer(timer_conf)
-                    else:
-                        ctrl.update_timer(int(key), timer_conf)
-                DEVICE.save_settings()
-            else:
-                ctrl.delete_timer(req_json)
-                DEVICE.save_settings()
-        await send_json(rsp, DEVICE.settings['timers'])
 
 @APP.route('/api/settings/wlan')
 async def get_wlan_settings(req, rsp):
     if req.method == 'POST':
         await req.read_json()
-        WLAN.conf.update(req.json)
-        WLAN.save_conf()
+        NETWORK_CONTROLLER._wlan.conf.update(req.json)
+        NETWORK_CONTROLLER._wlan.save_conf()
         if DEVICE:
             DEVICE.status["ssid_delay"] = True
         uasyncio.get_event_loop().create_task(delayed_reset(5))
@@ -108,14 +62,8 @@ async def get_wlan_settings(req, rsp):
 
 async def delayed_reset(delay):
     await uasyncio.sleep(delay)
-    WLAN.enable_ssid(True)
+    NETWORK_CONTROLLER._wlan.enable_ssid(True)
     #machine.reset()
-
-@APP.route('/api/climate/data')
-async def get_data(req, rsp):
-    ctrl = DEVICE.modules['climate']
-    if ctrl:
-        await send_json(rsp, ctrl.data)
 
 @APP.route('/api/time')
 async def get_time(req, rsp):
@@ -133,22 +81,6 @@ async def get_index(req, rsp):
     await APP.sendfile(rsp, 'html/index.html', content_type="text/html; charset=utf-8")
     gc.collect()
 
-@APP.route(re.compile(r'/api/(\w+)/relay'))
-async def relay_api(req, rsp):
-    ctrl = get_ctrl(req)
-    if ctrl:
-        if req.method == 'POST':
-            req_json = req.json()
-            if 'reverse' in req_json and hasattr(ctrl, 'reverse'):
-                ctrl.reverse = req_json['reverse']
-            ctrl.on(value=req_json['value'], source='manual')
-            if not req_json['value'] and hasattr(ctrl, 'reverse') and ctrl.reverse:
-                ctrl.reverse = False
-            await send_json(rsp, 'OK')
-        else:
-            await picoweb.start_response(rsp, status="405")
-        gc.collect()
-
 @APP.route('/api/modules')
 async def get_modules(req, rsp):
     await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
@@ -157,6 +89,13 @@ async def get_modules(req, rsp):
 async def get_device_hash(req, rsp):
     await send_json(rsp, DEVICE.id['hash'])
 
-DEVICE.start()
-gc.collect()
-APP.run(debug=True, host=WLAN.host, port=80)
+try:
+    DEVICE.start()
+    gc.collect()
+    if NETWORK_CONTROLLER._wlan:
+        APP.run(debug=True, host=NETWORK_CONTROLLER._wlan.host, port=80)
+    else:
+        uasyncio.get_event_loop().run_forever()
+except Exception as exc:
+    LOG.exc(exc, "Abnormal program termination")
+    machine.reset()

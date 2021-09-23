@@ -1,7 +1,7 @@
 import uerrno
 import uselect as select
 import usocket as _socket
-from uasyncio.core import *
+from lib.uasyncio.core import *
 
 
 DEBUG = 0
@@ -254,5 +254,5 @@ def start_server(client_coro, host, port, backlog=10):
         yield client_coro(StreamReader(s2), StreamWriter(s2, extra))
 
 
-import uasyncio.core
-uasyncio.core._event_loop_class = PollEventLoop
+import lib.uasyncio.core
+lib.uasyncio.core._event_loop_class = PollEventLoop

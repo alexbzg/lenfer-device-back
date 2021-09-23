@@ -2,7 +2,7 @@ import gc
 
 import micropython
 import ujson
-import ulogging 
+import lib.ulogging as ulogging
 
 def load_json(path):
     LOG = ulogging.getLogger("Main")

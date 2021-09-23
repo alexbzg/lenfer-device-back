@@ -3,8 +3,7 @@ import machine
 import uos
 import machine
 
-import ulogging
-import urequests
+import lib.ulogging as ulogging
 
 from utils import load_json, save_json, manage_memory
 from http_client import HttpClient

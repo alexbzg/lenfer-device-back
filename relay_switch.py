@@ -66,10 +66,10 @@ class RelaySwitchController(LenferController):
                     limits = [day[idx] if idx and day[idx] else None for idx in self._schedule_params_idx]
                     if limits[0] and ((limits[0] <= now and not limits[1]) or (limits[0] <= now < limits[1]) or (limits[0] < limits[1] <= now)):
                         if not self.pin.value():
-                            self.pin.on()
+                            self.pin.value(1)
                     if limits[1] and ((limits[1] <= now and not limits[0]) or (limits[1] <= now < limits[0]) or (limits[1] < limits[0] <= now)):
                         if self.pin.value():
-                            self.pin.off()
+                            self.pin.value(0)
             else:
                 if now == 0:
                     self.init_timers()

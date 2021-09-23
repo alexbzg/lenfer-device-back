@@ -5,11 +5,10 @@ import utime
 import ujson
 import network
 import machine
-from machine import WDT, Pin, SoftI2C
+from machine import WDT, Pin, I2C
 
-import uasyncio
-import ulogging
-import urequests
+import lib.uasyncio as uasyncio
+import lib.ulogging as ulogging
 
 from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
@@ -41,10 +40,10 @@ class LenferDevice:
         print('default settings loaded')
         self.save_settings()
 
-    def __init__(self, wlan):
-        self.WDT = None
+    def __init__(self, network_controller):
+        LOG.info("LenferDevice init")
         self._schedule = None
-        self._wlan = wlan
+        self._network = network_controller
         self.mode = None
         self.status = {
             "wlan": None,
@@ -72,8 +71,10 @@ class LenferDevice:
             factory_reset_button.irq(self.factory_reset_irq)
 
         self.modules = {}
-        self.i2c = [SoftI2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
+        self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
             for i2c_conf in self._conf['i2c']]
+        LOG.info('I2C init')
+
         self.leds = {led: Pin(pin_no, Pin.OUT) for led, pin_no in self._conf['leds'].items()}
         self.id = load_json('id.json')
         if 'debug' in self.id and self.id['debug']:
@@ -90,24 +91,30 @@ class LenferDevice:
                 from timers import RtcController
                 self.modules['rtc'] = RtcController(self._conf['modules']['rtc'], self._conf['i2c'])
                 self.modules['rtc'].get_time(set_rtc=True)
+                LOG.info('RTC init')
+
             except Exception as exc:
                 LOG.exc(exc, 'RTC initialization error')
         if 'climate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['climate']):
             try:
                 from climate import ClimateController
                 self.modules['climate'] = ClimateController(self, self._conf['modules']['climate'])
+                LOG.info('ClimateController init')
+
             except Exception as exc:
                 LOG.exc(exc, 'Climate initialization error')
         if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
             try:
                 from feeder import FeederController
                 self.modules['feeder'] = FeederController(self, self._conf['modules']['feeder'])
+                LOG.info('Feeder init')
             except Exception as exc:
                 LOG.exc(exc, 'Feeder initialization error')
         if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
             try:
                 from relay_switch import RelaySwitchController
                 self.modules['relay_switch'] = RelaySwitchController(self, self._conf['modules']['relay_switch'])
+                LOG.info('Relay init')
             except Exception as exc:
                 LOG.exc(exc, 'RelaySwitch initialization error')
         LOG.info(self.modules)
@@ -144,7 +151,7 @@ class LenferDevice:
             if self.status["ssid_delay"]:
                 self.status["ssid_delay"] = False
             else:
-                self._wlan.enable_ssid(True)
+                self._network._wlan.enable_ssid(True)
 
     def factory_reset_irq(self, pin):
         if pin.value():
@@ -183,18 +190,19 @@ class LenferDevice:
 
     async def bg_leds(self):
         while True:
-            self.WDT.feed()
-            await self.blink(("status",), 1 if self._wlan.mode == network.AP_IF else 2, 100)
+            machine.resetWDT()
+            if self._network._wlan:
+                await self.blink(("status",), 1 if self._network._wlan.mode == network.AP_IF else 2, 100)
             await uasyncio.sleep(2)
             gc.collect()
 
 
     async def task_check_software_updates(self, once=False):
         while True:
-            self.WDT.feed()
+            machine.resetWDT()
             if check_software_update():
                 schedule_software_update()
-            self.WDT.feed()
+            machine.resetWDT()
             if once:
                 break
             await uasyncio.sleep(3600)
@@ -210,7 +218,7 @@ class LenferDevice:
                     },
                     'props': self.settings
                 }
-                updates = await self.srv_post('device_updates', data)
+                updates = await self.srv_post('device_updates', data, retry=once)
                 if updates:
                     LOG.info(updates)
                     if 'schedule' in updates and updates['schedule']:
@@ -225,8 +233,6 @@ class LenferDevice:
                         machine.reset()                    
                     if 'mode' in self.settings and self.mode != self.settings['mode']:
                         machine.reset()
-                elif once:
-                    machine.reset()
             except Exception as exc:
                 LOG.exc(exc, 'Server updates check error')
             manage_memory()
@@ -256,7 +262,7 @@ class LenferDevice:
                         data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
                             for switch in ctrl.switches.values() if switch]
                 if data['data']:
-                    await self.srv_post('switches_state', data)
+                    await self.srv_post('switches_state', data, retry=once)
             except Exception as exc:
                 LOG.exc(exc, 'Server sensors data post error')
             manage_memory()
@@ -275,48 +281,55 @@ class LenferDevice:
             manage_memory()
 
 
-    @staticmethod
-    def post_tstamp(time_tuple=None):
+    def post_tstamp(self, time_tuple=None):
         if not time_tuple:
-            time_tuple = machine.RTC().datetime()
-        return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple)
+            time_tuple = machine.RTC().now()
+        return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple) if time_tuple else None
 
-    async def srv_post(self, url, data):        
+    async def srv_post(self, url, data, retry=False):        
         data['device_id'] = self.id['id']
         data['token'] = self.id['token']
         manage_memory()
-        self.WDT.feed()
+        machine.resetWDT()
         result = await self._http.post(self.server_uri + url, data)
-        if hasattr(self, 'WDT'):
-            self.WDT.feed()
+        if retry:
+            while not result:
+                machine.resetWDT()
+                await self._http.post(self.server_uri + url, data)
+        machine.resetWDT()
         manage_memory()
         return result
 
     def online(self):
-        return 'id' in self.id and self.id['id'] and (self._http._modem or self._wlan.online())
+        return 'id' in self.id and self.id['id'] and self._network.online()
 
     def deepsleep(self):
         return 'deepsleep' in self.settings and self.settings['deepsleep']
 
     def start(self):
-        self.WDT = WDT(timeout=60000)        
+        WDT(True)        
         if self.deepsleep():
+            loop = uasyncio.get_event_loop()
             for module_type in self.modules:
                 if module_type == 'rtc':
-                    uasyncio.run(self.modules['rtc'].adjust_time(once=True))
-                    self.WDT.feed()
+                    loop.run_until_complete(self.modules['rtc'].adjust_time(once=True))
+                    machine.resetWDT()
                 elif module_type == 'climate':
-                    uasyncio.run(self.modules['climate'].read(once=True))
-                    self.WDT.feed()
+                    loop.run_until_complete(self.modules['climate'].read(once=True))
+                    machine.resetWDT()
                     if self.online():
-                        uasyncio.run(self.post_sensor_data(once=True))
+                        loop.run_until_complete(self.post_sensor_data(once=True))
+                        machine.resetWDT()
                     if self.modules['climate'].light:
-                        uasyncio.run(self.modules['climate'].adjust_light(once=True))                
+                        loop.run_until_complete(self.modules['climate'].adjust_light(once=True))                
+                        machine.resetWDT()
                 if self.online():
                     if 'updates' in self.id and self.id['updates']:
-                        uasyncio.run(self.check_updates(once=True))
+                        loop.run_until_complete(self.check_updates(once=True))
+                        machine.resetWDT()
                     if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
-                        uasyncio.run(self.task_check_software_updates(once=True))
+                        loop.run_until_complete(self.task_check_software_updates(once=True))
+                        machine.resetWDT()
                 if self.deepsleep():
                     machine.deepsleep(self.deepsleep()*60000)
                 
@@ -326,7 +339,7 @@ class LenferDevice:
         loop = uasyncio.get_event_loop()     
         loop.create_task(self.bg_leds())
         loop.create_task(self.check_wlan_switch())
-        if self._wlan.mode == network.AP_IF and self._wlan.conf['ssid']:
+        if self._network._wlan and (self._network._wlan.mode == network.AP_IF and self._network._wlan.conf['ssid']):
             loop.create_task(self.delayed_ssid_switch())
         for module_type in self.modules:
             if module_type == 'climate':

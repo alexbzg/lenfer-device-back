@@ -72,13 +72,13 @@ class FeederController(RelaySwitchController):
                 del self._active[source]
         if self.state != bool(self._active):
             if self.state:
-                self.pin.off()
+                self.pin.value(0)
                 self.reverse = False
                 self.device.append_log_entries("Feeder stop {0}{1}".format(
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                
             else:
-                self.pin.on()
+                self.pin.value(1)
                 self.device.append_log_entries("Feeder start {0}{1}".format(
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                

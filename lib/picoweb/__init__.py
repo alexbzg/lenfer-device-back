@@ -8,8 +8,8 @@ import utime
 import uio
 import ure as re
 import uerrno
-import uasyncio as asyncio
-import pkg_resources
+import lib.uasyncio as asyncio
+import lib.pkg_resources as pkg_resourses
 
 from .utils import parse_qs
 
@@ -286,7 +286,7 @@ class WebApp:
 
     def run(self, host="127.0.0.1", port=8081, debug=False, lazy_init=False, log=None):
         if log is None and debug >= 0:
-            import ulogging
+            import lib.ulogging as ulogging
             log = ulogging.getLogger("picoweb")
             if debug > 0:
                 log.setLevel(ulogging.DEBUG)

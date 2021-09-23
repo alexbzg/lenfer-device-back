@@ -1,12 +1,10 @@
 import gc
 import utime
 import machine
-from machine import Pin
-import ds18x20
-import onewire
+from machine import Pin, Onewire
 
-import uasyncio
-import ulogging
+import lib.uasyncio as uasyncio
+import lib.ulogging as ulogging
 
 import BME280
 import ahtx0
@@ -109,14 +107,16 @@ class SensorDeviceDS18x20(SensorDevice):
         SensorDevice.__init__(self, conf, controller)
         print('ds18x20 init')
         self.rom = None
+        self._ow = None
         self._ds = None
         _ow = ow_list[conf['ow']]
         if _ow:
-            self._ds = ds18x20.DS18X20(onewire.OneWire(Pin(ow_list[conf['ow']])))
-            ow_roms = self._ds.scan()
+            self._ow = Onewire(Pin(ow_list[conf['ow']]))
+            ow_roms = self._ow.scan()
             if ow_roms:
                 self.rom = ow_roms[0]
                 print('ds18x20 rom found ' + str(self.rom))
+                self._ds = Onewire.ds18x20(self._ow, 0)
             else:
                 print('no ds18x20 rom found')
         else:
@@ -127,7 +127,7 @@ class SensorDeviceDS18x20(SensorDevice):
         "requests sensor readings"
         if self.rom:
             try:
-                self._ds.convert_temp()
+                self._ds.convert(False)
                 self._convert = True
             except Exception as exc:
                 LOG.exc(exc, 'onewire error')
@@ -137,7 +137,7 @@ class SensorDeviceDS18x20(SensorDevice):
         if self._convert:
             try:
                 self._controller.data[self._sensors_ids[0]] =\
-                    round(self._ds.read_temp(self.rom), 1)
+                    round(self._ds.read_temp(), 1)
             except Exception as exc:
                 LOG.exc(exc, 'onewire error')
                 self._controller.data[self._sensors_ids[0]] = None
@@ -311,22 +311,22 @@ class ClimateController(LenferController):
                 (temp[0] and temp_limits and temp[0] > temp_limits[1]) or\
                 (co2 and co2 > ClimateController.CO2_THRESHOLD):
                 if not self.switches['vent_out']['pin'].value():
-                    self.switches['vent_out']['pin'].on()
+                    self.switches['vent_out']['pin'].value(1)
                     LOG.info('Out on')
             elif (not humid or not humid_limits or humid < humid_limits[1]) and\
                 (not temp[0] or not temp_limits or temp[0] < temp_limits[1]) and\
                 (co2 == None or co2 < ClimateController.CO2_THRESHOLD):
                 if self.switches['vent_out']['pin'].value():
-                    self.switches['vent_out']['pin'].off()
+                    self.switches['vent_out']['pin'].value(0)
                     LOG.info('Out off')
         if self.switches['humid']['enabled']:
             if (humid and humid_limits and humid < humid_limits[0]):
                 if not self.switches['humid']['pin'].value():
-                    self.switches['humid']['pin'].on()
+                    self.switches['humid']['pin'].value(1)
                     LOG.info('Humid on')
             else:
                 if self.switches['humid']['pin'].value():
-                    self.switches['humid']['pin'].off()
+                    self.switches['humid']['pin'].value(0)
                     LOG.info('Humid off')
         if self.switches['air_con']['enabled']:
             if temp[0] and temp_limits and temp[0] > temp_limits[1] + 3:
@@ -335,10 +335,10 @@ class ClimateController(LenferController):
                     LOG.info('Air con on')
                     if self.switches['vent_out']['enabled'] and self.switches['vent_out']['pin'].value()\
                         and (co2 == None or co2 < 2000):
-                        self.switches['vent_out']['pin'].off()
+                        self.switches['vent_out']['pin'].value(0)
             else:
                 if self.switches['air_con']['pin'].value():
-                    self.switches['air_con']['pin'].off()
+                    self.switches['air_con']['pin'].value(0)
                     LOG.info('Air con off')       
 
         gc.collect()

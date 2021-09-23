@@ -82,6 +82,7 @@ class Modem(object):
 
             # Setup UART
             self.uart = UART(1, 9600, timeout=1000, rx=self.MODEM_TX_PIN, tx=self.MODEM_RX_PIN)
+            logger.info('UART initialized')
 
         # Test AT commands
         retries = 0
@@ -91,26 +92,26 @@ class Modem(object):
             except:
                 retries+=1
                 if retries < 3:
-                    logger.debug('Error in getting modem info, retrying.. (#{})'.format(retries))
+                    logger.info('Error in getting modem info, retrying.. (#{})'.format(retries))
                     time.sleep(3)
                 else:
                     raise
             else:
                 break
 
-        logger.debug('Ok, modem "{}" is ready and accepting commands'.format(self.modem_info))
+        logger.info('Ok, modem "{}" is ready and accepting commands'.format(self.modem_info))
 
         # Set initialized flag and support vars
         self.initialized = True
         
         # Check if SSL is supported
-        self.ssl_available = self.execute_at_command('checkssl') == '+CIPSSL: (0-1)'
+        #self.ssl_available = self.execute_at_command('checkssl') == '+CIPSSL: (0-1)'
 
 
     #----------------------
     # Execute AT commands
     #----------------------
-    def execute_at_command(self, command, data=None, clean_output=True, binary_output=False):
+    def execute_at_command(self, command, data=None, clean_output=True, binary_output=False, delay=False):
 
         # Commands dictionary. Not the best approach ever, but works nicely.
         commands = {
@@ -121,6 +122,7 @@ class Modem(object):
                     'network':    {'string':'AT+COPS?', 'timeout':3, 'end': 'OK'},
                     'signal':     {'string':'AT+CSQ', 'timeout':3, 'end': 'OK'},
                     'checkreg':   {'string':'AT+CREG?', 'timeout':3, 'end': None},
+                    'checkreg_2g':   {'string':'AT+CGREG?', 'timeout':3, 'end': None},
                     'setapn':     {'string':'AT+SAPBR=3,1,"APN","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'setuser':    {'string':'AT+SAPBR=3,1,"USER","{}"'.format(data), 'timeout':3, 'end': 'OK'},
                     'setpwd':     {'string':'AT+SAPBR=3,1,"PWD","{}"'.format(data), 'timeout':3, 'end': 'OK'},
@@ -162,6 +164,8 @@ class Modem(object):
         # Execute the AT command
         command_string_for_at = "{}\r\n".format(command_string)
         logger.debug('Writing AT command "{}"'.format(command_string_for_at.encode('utf-8')))
+        #while self.uart.any():
+        #    self.uart.read(self.uart.any())
         self.uart.write(command_string_for_at)
 
         # Support vars
@@ -180,7 +184,7 @@ class Modem(object):
                     #logger.warning('Timeout for command "{}" (timeout={})'.format(command, timeout))
                     #break
             else:
-                logger.debug('Read "{}"'.format(line if len(line) < 100 else '--- LONG LINE ---c'))
+                logger.debug('Read "{}"'.format(line if len(line) < 1000 else '--- LONG LINE ---c'))
 
                 # Convert line to string
                 line_str = ''
@@ -237,6 +241,9 @@ class Modem(object):
                 output = output[:-1]
 
         # Return
+        if delay:
+            logger.debug("delay after at command")
+            time.sleep(5)
         return output
 
 
@@ -288,7 +295,8 @@ class Modem(object):
         output = output.split('+')[-1] # Remove potential leftovers in the buffer before the "+SAPBR:" response
         pieces = output.split(',')
         if len(pieces) != 3:
-            raise Exception('Cannot parse "{}" to get an IP address'.format(output))
+            logger.info('Cannot parse "{}" to get an IP address'.format(output))
+            return None
         ip_addr = pieces[2].replace('"','')
         if len(ip_addr.split('.')) != 4:
             raise Exception('Cannot parse "{}" to get an IP address'.format(output))
@@ -309,7 +317,7 @@ class Modem(object):
         logger.debug('Trying to close the bearer in case it was left open somehow..')
         try:
             self.execute_at_command('closebear')
-        except GenericATError:
+        except Exception:
             pass
 
         # First, init gprs
@@ -318,13 +326,13 @@ class Modem(object):
 
         # Second, set the APN
         logger.debug('Connect step #2 (setapn)')
-        self.execute_at_command('setapn', apn)
-        self.execute_at_command('setuser', user)
-        self.execute_at_command('setpwd', pwd)
+        self.execute_at_command('setapn', apn, delay=True)
+        self.execute_at_command('setuser', user, delay=True)
+        self.execute_at_command('setpwd', pwd, delay=True)
 
         # Then, open the GPRS connection.
         logger.debug('Connect step #3 (opengprs)')
-        self.execute_at_command('opengprs')
+        self.execute_at_command('opengprs', delay=True)
 
         # Ok, now wait until we get a valid IP address
         retries = 0
@@ -368,7 +376,7 @@ class Modem(object):
         logger.debug('Close the http context if left open somehow...')
         try:
             self.execute_at_command('closehttp')
-        except GenericATError:
+        except Exception:
             pass
 
         # First, init and set http
@@ -378,16 +386,16 @@ class Modem(object):
         self.execute_at_command('sethttp')
 
         # Do we have to enable ssl as well?
-        if self.ssl_available:
-            if url.startswith('https://'):
-                logger.debug('Http request step #1.3 (enablessl)')
-                self.execute_at_command('enablessl')
-            elif url.startswith('http://'):
-                logger.debug('Http request step #1.3 (disablessl)')
-                self.execute_at_command('disablessl')
-        else:
-            if url.startswith('https://'):
-                raise NotImplementedError("SSL is only supported by firmware revisions >= R14.00")
+#        if self.ssl_available:
+#            if url.startswith('https://'):
+#                logger.debug('Http request step #1.3 (enablessl)')
+#                self.execute_at_command('enablessl')
+#            elif url.startswith('http://'):
+#                logger.debug('Http request step #1.3 (disablessl)')
+#                self.execute_at_command('disablessl')
+#        else:
+#            if url.startswith('https://'):
+#                raise NotImplementedError("SSL is only supported by firmware revisions >= R14.00")
 
         # Second, init and execute the request
         logger.debug('Http request step #2.1 (initurl)')

@@ -1,8 +1,8 @@
 import gc
 from machine import Pin, I2C, RTC
 
-import uasyncio
-import ulogging
+import lib.uasyncio as uasyncio
+import lib.ulogging as ulogging
 
 from ds3231_port import DS3231
 

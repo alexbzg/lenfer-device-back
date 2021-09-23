@@ -101,7 +101,7 @@ class DS3231:
         if rtc is None:
             raise RuntimeError('machine.RTC does not exist')
         verbose and print('Waiting {} minutes for result'.format(runtime//60))
-        factor = 1_000_000 if ppm else 114_155_200  # seconds per year
+        factor = 1000000 if ppm else 114155200  # seconds per year
 
         self.await_transition()  # Start on transition of DS3231. Record time in .timebuf
         t = utime.ticks_ms()  # Get system time now
@@ -128,6 +128,6 @@ class DS3231:
         d_rtc = 1000 * (rtc_end - rtc_start) + de - ds  # ms recorded by RTC
         d_ds3231 = 1000 * (ds3231_end - ds3231_start)  # ms recorded by DS3231
         ratio = (d_ds3231 - d_rtc) / d_ds3231
-        ppm = ratio * 1_000_000
+        ppm = ratio * 1000000
         verbose and print('DS3231 leads RTC by {:4.1f}ppm {:4.1f}mins/yr'.format(ppm, ppm*1.903))
         return ratio * factor
