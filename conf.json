@@ -33,18 +33,19 @@
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 25,
-        "sda": 12
+        "scl": 33,
+        "sda": 32
     }],
-    "ow": [13, 14],
-    "leds": {},
+    "ow": [25, 26],
+    "leds": {
+        "status": 13
+    },
     "factory_reset": null,
     "wlan_switch": null,
     "gsm_modem": {
-        "pwr_key": 4,
-        "rst": 5,
-        "pwr": 23,
-        "tx": 27,
-        "rx": 26
+        "rst": 19,
+        "pwr_key": 21,
+        "tx": 23,
+        "rx": 22
     }
 }

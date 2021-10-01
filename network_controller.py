@@ -68,24 +68,29 @@ class WlanController:
 class NetworkController():
 
     def gsm_pwr_key_cycle(self):
-        if self._gsm_pwr_key:
+        if self.gsm and self._gsm_pwr_key:
             self._gsm_pwr_key.value(1)
             utime.sleep_ms(200)
             self._gsm_pwr_key.value(0)
             utime.sleep(1)
             self._gsm_pwr_key.value(1)
+    
+    def off(self):
+        if self.gsm:
+            if self._gsm_pwr_key:
+                self._gsm_pwr_key.value(0)
+            if self._gsm_rst:
+                self._gsm_rst.value(0)
 
-    def gsm_start(self):
+    def gsm_start(self, apn_settings):
         import gsm
-        gsm.debug(True)  # Uncomment this to see more logs, investigate issues, etc.
+        gsm.debug(True)  # see more logs, investigate issues, etc.
 
-        gsm.start(tx=self._conf['gsm_modem']['tx'], rx=self._conf['gsm_modem']['rx'],\
-            apn=self._gsm_settings['apn'] if 'apn' in self._gsm_settings else None,
-            user=self._gsm_settings['user'] if 'user' in self._gsm_settings else None, 
-            password=self._gsm_settings['password'] if 'password' in self._gsm_settings else None)
+        gsm.start(tx=self._conf['gsm_modem']['tx'], rx=self._conf['gsm_modem']['rx'], **apn_settings)
 
         sys.stdout.write('Waiting for AT command response...')
         for retry in range(20):
+            machine.resetWDT()
             if gsm.atcmd('AT'):
                 return True
             else:
@@ -93,24 +98,28 @@ class NetworkController():
                 utime.sleep(5)
         else:
             sys.stdout.write("Modem not responding!")
-            return False
+            machine.reset()
 
     def gsm_connect(self):
         import gsm
         gsm.connect()
-        print("-----")
         while gsm.status()[0] != 1:
             pass
-        print('IP:', gsm.ifconfig()[0])
+        LOG.info('IP: %s' % gsm.ifconfig()[0])
 
     def __init__(self):
         self._conf = load_json('conf.json')
         self._wlan = None
+        self.gsm = False
         self._gsm_settings = {}
         if 'gsm_modem' in self._conf and self._conf['gsm_modem']:
-            self._gsm_settings = load_json('gsm_modem.json')
-            if not self._gsm_settings:
-                self._gsm_settings = {}
+            import gsm
+            #'\r\n+COPS: 0,0,"MTS"\r\n\r\nOK\r\n'
+            self.gsm = True
+            self._gsm_settings = load_json('gsm_settings.json') or {}
+            gsm_apns = load_json('gsm_apns.json')
+            apn_settings = {}
+
             self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.OUT)\
                 if 'pwr' in self._conf['gsm_modem'] and self._conf['gsm_modem']['pwr'] else None
             if self._gsm_pwr:
@@ -125,13 +134,31 @@ class NetworkController():
                 if 'pwr_key' in self._conf['gsm_modem'] and self._conf['gsm_modem']['pwr_key'] else None
             self.gsm_pwr_key_cycle()
 
-            if not self.gsm_start():
-                machine.reset
-            utime.sleep(2)
+            if 'network' not in self._gsm_settings or not self._gsm_settings['network']:
+                self.gsm_start({'apn': ''})
+                machine.resetWDT()
+
+                network_cmd = gsm.atcmd('AT+COPS?', timeout=1000, response='OK')
+                network_name = [key for key in gsm_apns.keys() if key in network_cmd]
+                if network_name:
+                    self._gsm_settings['network'] = network_name[0]
+                    save_json(self._gsm_settings, 'gsm_settings.json')
+                    gsm.stop()
+                else:
+                    LOG.info('Network apn data not found. Trying empty apn.')
+
+            if 'network' in self._gsm_settings and self._gsm_settings['network']:
+                apn_settings = gsm_apns[self._gsm_settings['network']]          
+
+            if apn_settings:
+                self.gsm_start(apn_settings)
+
+            machine.resetWDT()
             self.gsm_connect()
+            machine.resetWDT()
 
     def online(self):
-        if 'gsm_modem' in self._conf and self._conf['gsm_modem']:
+        if self.gsm:
             import gsm
             return gsm.status()[0] == 1
         if self._wlan:

@@ -28,8 +28,9 @@ class HttpClient:
         if data:
             LOG.error('Postdata: %s' % data)
         if (exc and isinstance(exc, OSError) or (status_code and status_code > 599)):
-            if utime.time() - self._srv_last_contact > 1800:
-                LOG.error("server unreachable for 30 minutes: reboot")
+            LOG.error('server is unreachable')
+            if utime.time() - self._srv_last_contact > 300:
+                LOG.error("server unreachable for 5 minutes: reboot")
                 machine.reset()
 
     def get_to_file(self, url, local_path):
@@ -89,4 +90,5 @@ class HttpClient:
             finally:
                 rsp.close()
                 rsp = None
+        LOG.info("return: %s" % result)
         return result            

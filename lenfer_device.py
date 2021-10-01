@@ -1,9 +1,5 @@
 import gc
-import micropython
-import uerrno
-import utime
-import ujson
-import network
+from network import AP_IF
 import machine
 from machine import WDT, Pin, I2C
 
@@ -82,7 +78,7 @@ class LenferDevice:
         else:
             self.server_uri = SERVER_URI
         for led in self.leds.values():
-            led.off()
+            led.value(0)
 
         self.schedule = Schedule()
 
@@ -95,6 +91,7 @@ class LenferDevice:
 
             except Exception as exc:
                 LOG.exc(exc, 'RTC initialization error')
+            machine.resetWDT()
         if 'climate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['climate']):
             try:
                 from climate import ClimateController
@@ -103,6 +100,7 @@ class LenferDevice:
 
             except Exception as exc:
                 LOG.exc(exc, 'Climate initialization error')
+            machine.resetWDT()
         if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
             try:
                 from feeder import FeederController
@@ -110,6 +108,7 @@ class LenferDevice:
                 LOG.info('Feeder init')
             except Exception as exc:
                 LOG.exc(exc, 'Feeder initialization error')
+            machine.resetWDT()
         if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
             try:
                 from relay_switch import RelaySwitchController
@@ -117,6 +116,7 @@ class LenferDevice:
                 LOG.info('Relay init')
             except Exception as exc:
                 LOG.exc(exc, 'RelaySwitch initialization error')
+            machine.resetWDT()
         LOG.info(self.modules)
 
     def append_log_entries(self, entries):
@@ -180,11 +180,11 @@ class LenferDevice:
         for co in range(count):
             for led in leds:
                 if led in self.leds:
-                    self.leds[led].on()
+                    self.leds[led].value(1)
             await uasyncio.sleep_ms(time_ms)
             for led in leds:
                 if led in self.leds:
-                    self.leds[led].off()
+                    self.leds[led].value(0)
             if co < count - 1:
                 await uasyncio.sleep_ms(time_ms)
 
@@ -192,7 +192,9 @@ class LenferDevice:
         while True:
             machine.resetWDT()
             if self._network._wlan:
-                await self.blink(("status",), 1 if self._network._wlan.mode == network.AP_IF else 2, 100)
+                await self.blink(("status",), 1 if self._network._wlan.mode == AP_IF else 2, 100)
+            elif self._network.gsm:
+                await self.blink(("status",), 4 if self._network.online() else 3, 100)
             await uasyncio.sleep(2)
             gc.collect()
 
@@ -252,7 +254,7 @@ class LenferDevice:
                         data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                             for _id, value in ctrl.data.items()]
                 if data['data']:
-                    rsp = await self.srv_post('sensors_data', data)
+                    rsp = await self.srv_post('sensors_data', data, retry=once)
                     if once and not rsp:
                         machine.reset()
                 data = {'data': []}
@@ -295,7 +297,7 @@ class LenferDevice:
         if retry:
             while not result:
                 machine.resetWDT()
-                await self._http.post(self.server_uri + url, data)
+                result = await self._http.post(self.server_uri + url, data)
         machine.resetWDT()
         manage_memory()
         return result
@@ -331,6 +333,8 @@ class LenferDevice:
                         loop.run_until_complete(self.task_check_software_updates(once=True))
                         machine.resetWDT()
                 if self.deepsleep():
+                    if self._network:
+                        self._network.off()
                     machine.deepsleep(self.deepsleep()*60000)
                 
         self.start_async()
