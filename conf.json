@@ -2,6 +2,7 @@
     "modules": {
         "climate": {
             "enabled": true,
+            "obligatory": true,
             "sensor_devices": [
                 {
                     "type": "aht20",
@@ -46,6 +47,7 @@
         "rst": 19,
         "pwr_key": 21,
         "tx": 23,
-        "rx": 22
+        "rx": 22,
+        "on": 18
     }
 }

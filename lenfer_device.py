@@ -55,14 +55,14 @@ class LenferDevice:
         self._http = HttpClient()
         if not self.settings:
             self.load_def_settings()
-        if 'mode' in self.settings and self.settings['mode']:
+        if self.settings.get('mode'):
             self.mode = self.settings['mode']
 
-        if 'wlan_switch' in self._conf and self._conf['wlan_switch']:
+        if self._conf.get('wlan_switch'):
             wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
             wlan_switch_button.irq(self.wlan_switch_irq)
 
-        if 'factory_reset' in self._conf and self._conf['factory_reset']:
+        if self._conf.get('factory_reset'):
             factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
             factory_reset_button.irq(self.factory_reset_irq)
 
@@ -81,6 +81,8 @@ class LenferDevice:
             led.value(0)
 
         self.schedule = Schedule()
+        manage_memory()
+        machine.resetWDT()
 
         if 'rtc' in self._conf['modules'] and self.module_enabled(self._conf['modules']['rtc']):
             try:
@@ -92,6 +94,7 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'RTC initialization error')
             machine.resetWDT()
+            manage_memory()
         if 'climate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['climate']):
             try:
                 from climate import ClimateController
@@ -100,7 +103,11 @@ class LenferDevice:
 
             except Exception as exc:
                 LOG.exc(exc, 'Climate initialization error')
+                if self._conf['modules']['climate'].get('obligatory'):
+                    LOG.error('Obligatory module initialization fail -- machine reset')
+                    machine.reset()
             machine.resetWDT()
+            manage_memory()
         if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
             try:
                 from feeder import FeederController
@@ -109,6 +116,8 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'Feeder initialization error')
             machine.resetWDT()
+            manage_memory()
+
         if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
             try:
                 from relay_switch import RelaySwitchController
@@ -117,6 +126,8 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'RelaySwitch initialization error')
             machine.resetWDT()
+            manage_memory()
+
         LOG.info(self.modules)
 
     def append_log_entries(self, entries):
@@ -126,7 +137,7 @@ class LenferDevice:
         for idx, entry in enumerate(entries):
             if isinstance(entry, str):
                 entries[idx] = {'txt': entry}
-            if not 'log_tstamp' in entries[idx] or not entries[idx]['log_tstamp']:
+            if not entries[idx].get('log_tstamp'):
                 entries[idx]['log_tstamp'] = tstamp
         if self.online():
             self.log_queue.extend(entries)
@@ -223,7 +234,7 @@ class LenferDevice:
                 updates = await self.srv_post('device_updates', data, retry=once)
                 if updates:
                     LOG.info(updates)
-                    if 'schedule' in updates and updates['schedule']:
+                    if updates.get('schedule'):
                         self.schedule.update(updates['schedule'])
                     if 'props' in updates and updates['props']:
                         self.settings = updates['props']
@@ -303,10 +314,10 @@ class LenferDevice:
         return result
 
     def online(self):
-        return 'id' in self.id and self.id['id'] and self._network.online()
+        return self.id.get('id') and self._network.online()
 
     def deepsleep(self):
-        return 'deepsleep' in self.settings and self.settings['deepsleep']
+        return self.settings.get('deepsleep')
 
     def start(self):
         WDT(True)        
@@ -326,10 +337,10 @@ class LenferDevice:
                         loop.run_until_complete(self.modules['climate'].adjust_light(once=True))                
                         machine.resetWDT()
                 if self.online():
-                    if 'updates' in self.id and self.id['updates']:
+                    if self.id.get('updates'):
                         loop.run_until_complete(self.check_updates(once=True))
                         machine.resetWDT()
-                    if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
+                    if not self.id.get('disable_software_updates'):
                         loop.run_until_complete(self.task_check_software_updates(once=True))
                         machine.resetWDT()
                 if self.deepsleep():
@@ -360,9 +371,9 @@ class LenferDevice:
                 loop.create_task(self.modules['relay_switch'].adjust_switch())
         if self.online():
             loop.create_task(self.post_log())
-            if 'updates' in self.id and self.id['updates']:
+            if self.id.get('updates'):
                 loop.create_task(self.check_updates())
-            if 'disable_software_updates' not in self.id or not self.id['disable_software_updates']:
+            if not self.id.get('disable_software_updates'):
                 loop.create_task(self.task_check_software_updates())
 
         self.append_log_entries('device start')

@@ -6,7 +6,7 @@ import machine
 import lib.ulogging as ulogging
 LOG = ulogging.getLogger("Network")
 
-from utils import load_json, save_json
+from utils import load_json, save_json, manage_memory
 
 class WlanController:
 
@@ -65,6 +65,9 @@ class WlanController:
         self.save_conf()
         machine.reset()
 
+def wlan_enabled_switch_handler():
+    machine.reset()
+
 class NetworkController():
 
     def gsm_pwr_key_cycle(self):
@@ -77,10 +80,19 @@ class NetworkController():
     
     def off(self):
         if self.gsm:
+            import gsm
+            machine.resetWDT()
+            gsm.stop()
             if self._gsm_pwr_key:
                 self._gsm_pwr_key.value(0)
             if self._gsm_rst:
                 self._gsm_rst.value(0)
+            if self._gsm_pwr:
+                self._gsm_pwr.value(0)
+            if self._gsm_modem_on:
+                for uart_pin_type in ('tx', 'rx'):
+                    uart_pin = machine.Pin(self._conf['gsm_modem'][uart_pin_type], machine.Pin.OUT, value=0)
+                self._gsm_modem_on.value(0)            
 
     def gsm_start(self, apn_settings):
         import gsm
@@ -105,36 +117,44 @@ class NetworkController():
         gsm.connect()
         while gsm.status()[0] != 1:
             pass
-        LOG.info('IP: %s' % gsm.ifconfig()[0])
+        LOG.info('IP: %s' % gsm.ifconfig()[0]) 
 
     def __init__(self):
-        self._conf = load_json('conf.json')
+        self._conf = {}
+        conf = load_json('conf.json')
+        for conf_item in ('wlan_enabled_switch', 'gsm_modem'):
+            if conf_item in conf:
+                self._conf[conf_item] = conf[conf_item]
         self._wlan = None
+        self._wlan_enabled_switch = None
         self.gsm = False
         self._gsm_settings = {}
-        if 'gsm_modem' in self._conf and self._conf['gsm_modem']:
+        enable_wlan = False
+        if self._conf.get('wlan_enabled_switch'):
+            self._wlan_enabled_switch = machine.Pin(self._conf['wlan_enabled_switch'], handler=wlan_enabled_switch_handler)
+            enable_wlan = self._wlan_enabled_switch.value()
+            machine.RTC().wake_on_ext0(self._wlan_enabled_switch, 1)
+        if not enable_wlan and self._conf.get('gsm_modem'):
             import gsm
-            #'\r\n+COPS: 0,0,"MTS"\r\n\r\nOK\r\n'
+            self._gsm_modem_on = None
+            if self._conf['gsm_modem'].get('on'):
+                self._gsm_modem_on = machine.Pin(self._conf['gsm_modem']['on'], machine.Pin.OUT, value=1)
             self.gsm = True
             self._gsm_settings = load_json('gsm_settings.json') or {}
             gsm_apns = load_json('gsm_apns.json')
             apn_settings = {}
 
-            self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.OUT)\
-                if 'pwr' in self._conf['gsm_modem'] and self._conf['gsm_modem']['pwr'] else None
-            if self._gsm_pwr:
-                self._gsm_pwr.value(1)
+            self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.OUT, value=1)\
+                if self._conf['gsm_modem'].get('pwr') else None
 
-            self._gsm_rst = machine.Pin(self._conf['gsm_modem']['rst'], machine.Pin.OUT)\
-                if 'rst' in self._conf['gsm_modem'] and self._conf['gsm_modem']['rst'] else None
-            if self._gsm_rst:
-                self._gsm_rst.value(1)
+            self._gsm_rst = machine.Pin(self._conf['gsm_modem']['rst'], machine.Pin.OUT, value=1)\
+                if self._conf['gsm_modem'].get('rst') else None
 
             self._gsm_pwr_key = machine.Pin(self._conf['gsm_modem']['pwr_key'], machine.Pin.OUT)\
-                if 'pwr_key' in self._conf['gsm_modem'] and self._conf['gsm_modem']['pwr_key'] else None
+                if self._conf['gsm_modem'].get('pwr_key') else None
             self.gsm_pwr_key_cycle()
 
-            if 'network' not in self._gsm_settings or not self._gsm_settings['network']:
+            if not self._gsm_settings.get('network'):
                 self.gsm_start({'apn': ''})
                 machine.resetWDT()
 
@@ -147,7 +167,7 @@ class NetworkController():
                 else:
                     LOG.info('Network apn data not found. Trying empty apn.')
 
-            if 'network' in self._gsm_settings and self._gsm_settings['network']:
+            if self._gsm_settings.get('network'):
                 apn_settings = gsm_apns[self._gsm_settings['network']]          
 
             if apn_settings:
@@ -156,6 +176,8 @@ class NetworkController():
             machine.resetWDT()
             self.gsm_connect()
             machine.resetWDT()
+        else:
+            self._wlan = WlanController()
 
     def online(self):
         if self.gsm:

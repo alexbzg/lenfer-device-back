@@ -5,9 +5,12 @@
         "password": "mts"
     },
     "BeeLine": {
-
+        "apn": "internet.beeline.ru"
     },
     "MegaFon": {
-        
+        "apn": "internet"
+    },
+    "Tele2": {
+        "apn": "internet.tele2.ru"
     }
 }

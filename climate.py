@@ -159,11 +159,11 @@ class ClimateController(LenferController):
         self._sleep = conf['sleep']
         self.data = {}
         self.sensor_devices = []
-        self.light = Pin(conf['light'], Pin.OUT) if 'light' in conf and conf['light'] else None
+        self.light = Pin(conf['light'], Pin.OUT) if conf.get('light') else None
         if 'switches' in conf and conf['switches']:
             
             for switch_type in ('heat', 'vent_out', 'vent_mix', 'humid', 'air_con'):
-                if switch_type in conf['switches'] and conf['switches'][switch_type] and\
+                if conf['switches'].get(switch_type) and\
                     (not self.device.mode or 'modes' not in conf['switches'][switch_type] or 
                     not conf['switches'][switch_type] or self.device.mode in conf['switches'][switch_type]):
                     switch_conf = conf['switches'][switch_type]
@@ -189,7 +189,7 @@ class ClimateController(LenferController):
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
 
     def update_settings(self):
-        if 'switches' in self.device.settings and self.device.settings['switches']:
+        if self.device.settings.get('switches'):
             for switch_id, enabled in self.device.settings['switches'].items():
                 switch_filter = [item for item in self.switches.values() if item['id'] == int(switch_id)]
                 if switch_filter:
@@ -252,8 +252,7 @@ class ClimateController(LenferController):
 
         day = self.device.schedule.current_day()
 
-        co2 = self.data[self.sensors_roles['co2'][0]] if 'co2' in self.sensors_roles and self.sensors_roles['co2']\
-            else None 
+        co2 = self.data[self.sensors_roles['co2'][0]] if self.sensors_roles.get('co2') else None 
 
         if day:
             temp_idx = self.device.schedule.param_idx('temperature')
