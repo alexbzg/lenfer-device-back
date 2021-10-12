@@ -62,9 +62,9 @@ class Timer:
     def on(self, value=True):
         self.active = value
         if value:
-            self.relay.on()
+            self.relay.value(1)
         else:
-            self.relay.off()
+            self.relay.value(0)
 
     def off(self):
         self.on(False)
