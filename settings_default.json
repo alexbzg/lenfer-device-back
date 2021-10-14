@@ -1,3 +1,4 @@
 {
-    "air_con": false
+    "mode": "feeder",
+    "timers": []
 }

@@ -1,5 +1,3 @@
-import gc
-import utime
 import machine
 from machine import Pin, Onewire
 
@@ -15,134 +13,6 @@ from timers import time_tuple_to_seconds
 
 LOG = ulogging.getLogger("Climate")
 
-class SensorDevice:
-    "generic sensor handler"
-
-    def __init__(self, conf, controller):
-        self.sensor_type = conf['type']
-        self._controller = controller
-        self._sensors_ids = conf['sensors_ids']
-        if controller:
-            for sensor_id in self._sensors_ids:
-                if not sensor_id in controller.data:
-                    controller.data[sensor_id] = None
-
-class SensorDeviceBME280(SensorDevice):
-    "BME280 sensor handler"
-
-    def __init__(self, conf, controller, i2c_list):
-        SensorDevice.__init__(self, conf, controller)
-        self._i2c = i2c_list[conf['i2c']]
-
-    def read(self):
-        "reads sensors data and stores in into controller data field"
-        humid, temp = None, None
-        try:
-            bme = BME280.BME280(i2c=self._i2c)
-            temp = round((bme.read_temperature() / 100), 1)
-            humid = int(bme.read_humidity() // 1024)
-        except Exception as exc:
-            pass
-            #LOG.exc(exc, 'BME280 error')
-        finally:
-            self._controller.data[self._sensors_ids[0]] = temp
-            self._controller.data[self._sensors_ids[1]] = humid
-
-class SensorDeviceAHT20(SensorDevice):
-    "AHT20 sensor handler"
-
-    def __init__(self, conf, controller, i2c_list):
-        SensorDevice.__init__(self, conf, controller)
-        try:
-            self._ahtx0 = ahtx0.AHT20(i2c_list[conf['i2c']])
-        except Exception as exc:
-            LOG.exc(exc, 'AHTX0 initialization error')
-
-    def read(self):
-        "reads sensors data and stores in into controller data field"
-        humid, temp = None, None
-        try:
-            temp = self._ahtx0.temperature
-            humid = self._ahtx0.relative_humidity
-        except Exception as exc:
-            pass
-            #LOG.exc(exc, 'BME280 error')
-        finally:
-            self._controller.data[self._sensors_ids[0]] = temp
-            self._controller.data[self._sensors_ids[1]] = humid
-
-class SensorDeviceCCS811(SensorDevice):
-    "CCS811 sensor handler"
-
-    def __init__(self, conf, controller, i2c_list):
-        SensorDevice.__init__(self, conf, controller)
-        self._ccs811 = None
-        try:
-            self._ccs811 = CCS811(i2c_list[conf['i2c']])
-        except Exception as exc:
-            LOG.exc(exc, 'CCS811 initialization error')
-
-    def read(self):
-        "reads sensors data and stores in into controller data field"
-        if self._ccs811:
-            co2 = None
-            try:
-                if self._ccs811.data_ready():
-                    co2 = self._ccs811.eCO2
-                    temp = self._controller.data[self._controller.sensors_roles['temperature'][0]]
-                    humid = self._controller.data[self._controller.sensors_roles['humidity'][0]]
-                    if temp != None and humid != None:
-                        self._ccs811.put_envdata(humid, temp)
-            except Exception as exc:
-                pass
-                #LOG.exc(exc, 'BME280 error')
-            finally:
-                if co2:
-                    self._controller.data[self._sensors_ids[0]] = co2
-
-class SensorDeviceDS18x20(SensorDevice):
-    "ds18x20 sensor handler"
-
-    def __init__(self, conf, controller, ow_list):
-        SensorDevice.__init__(self, conf, controller)
-        print('ds18x20 init')
-        self.rom = None
-        self._ow = None
-        self._ds = None
-        _ow = ow_list[conf['ow']]
-        if _ow:
-            self._ow = Onewire(Pin(ow_list[conf['ow']]))
-            ow_roms = self._ow.scan()
-            if ow_roms:
-                self.rom = ow_roms[0]
-                print('ds18x20 rom found ' + str(self.rom))
-                self._ds = Onewire.ds18x20(self._ow, 0)
-            else:
-                print('no ds18x20 rom found')
-        else:
-            print('invalid onewire settings')
-        self._convert = False
-
-    def convert(self):
-        "requests sensor readings"
-        if self.rom:
-            try:
-                self._ds.convert(False)
-                self._convert = True
-            except Exception as exc:
-                LOG.exc(exc, 'onewire error')
-
-    def read(self):
-        "reads sensors data and stores in into controller data field"
-        if self._convert:
-            try:
-                self._controller.data[self._sensors_ids[0]] =\
-                    round(self._ds.read_temp(), 1)
-            except Exception as exc:
-                LOG.exc(exc, 'onewire error')
-                self._controller.data[self._sensors_ids[0]] = None
-            finally:
-                self._convert = False
 
 class ClimateController(LenferController):
 
@@ -163,35 +33,38 @@ class ClimateController(LenferController):
         if 'switches' in conf and conf['switches']:
             
             for switch_type in ('heat', 'vent_out', 'vent_mix', 'humid', 'air_con'):
-                if conf['switches'].get(switch_type) and\
-                    (not self.device.mode or 'modes' not in conf['switches'][switch_type] or 
-                    not conf['switches'][switch_type] or self.device.mode in conf['switches'][switch_type]):
-                    switch_conf = conf['switches'][switch_type]
-                    self.switches[switch_type] = {
-                        'pin': Pin(switch_conf['pin'], Pin.OUT),
-                        'id': switch_conf['id'],
-                        'enabled': True
-                    }
-                    self.switches[switch_type]['pin'].value(0)
+                if conf['switches'].get(switch_type) and (not self.device.mode or 'modes' not in conf['switches'][switch_type] 
+                    or self.device.mode in conf['switches'][switch_type]):                       
+                        switch_conf = conf['switches'][switch_type]
+                        self.switches[switch_type] = {
+                            'pin': Pin(switch_conf['pin'], Pin.INOUT),
+                            'id': switch_conf['id'],
+                            'enabled': True
+                        }
+                        self.switches[switch_type]['pin'].value(0)
                 else:
                     self.switches[switch_type] = {'enabled': False}
 
         self.update_settings()
 
         for sensor_device_conf in conf['sensor_devices']:
-            if sensor_device_conf['type'] == 'bme280':
+            if sensor_device_conf['type'] == 'bme280':                
+                from sensors import SensorDeviceBME280
                 self.sensor_devices.append(SensorDeviceBME280(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'aht20':
-               self.sensor_devices.append(SensorDeviceAHT20(sensor_device_conf, self, device.i2c))
+                from sensors import SensorDeviceAHT20
+                self.sensor_devices.append(SensorDeviceAHT20(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ccs811':
-               self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
+                from sensors import SensorDeviceCCS811
+                self.sensor_devices.append(SensorDeviceCCS811(sensor_device_conf, self, device.i2c))
             elif sensor_device_conf['type'] == 'ds18x20':
+                from sensors import SensorDeviceDS18x20
                 self.sensor_devices.append(SensorDeviceDS18x20(sensor_device_conf, self, device._conf['ow']))
 
     def update_settings(self):
         if self.device.settings.get('switches'):
             for switch_id, enabled in self.device.settings['switches'].items():
-                switch_filter = [item for item in self.switches.values() if item['id'] == int(switch_id)]
+                switch_filter = [item for item in self.switches.values() if item.get('id') == int(switch_id)]
                 if switch_filter:
                     switch = switch_filter[0]
                     if 'pin' in switch:
@@ -247,7 +120,7 @@ class ClimateController(LenferController):
         while len(temp) < 2:
             temp.append(None)
 
-        humid = self.data[self.sensors_roles['humidity'][0]]
+        humid = self.data[self.sensors_roles['humidity'][0]] if 'humidity' in self.sensors_roles else None
         temp_limits, humid_limits = None, None
 
         day = self.device.schedule.current_day()
@@ -262,12 +135,13 @@ class ClimateController(LenferController):
                 day[temp_idx] + temp_delta,
             ]
 
-            humid_idx = self.device.schedule.param_idx('humidity')
-            humid_delta = self.device.schedule.params['delta'][humid_idx]
-            humid_limits = [
-                day[humid_idx] - humid_delta,
-                day[humid_idx] + humid_delta,
-            ]
+            if humid:
+                humid_idx = self.device.schedule.param_idx('humidity')
+                humid_delta = self.device.schedule.params['delta'][humid_idx]
+                humid_limits = [
+                    day[humid_idx] - humid_delta,
+                    day[humid_idx] + humid_delta,
+                ]
 
         elif self.limits:
             temp_limits = [
@@ -275,10 +149,11 @@ class ClimateController(LenferController):
                 self.limits['temperature'][0] + self.limits['temperature'][1],
             ]
 
-            humid_limits = [
-                self.limits['humidity'][0] - self.limits['humidity'][1],
-                self.limits['humidity'][0] + self.limits['humidity'][1],
-            ]
+            if humid:
+                humid_limits = [
+                    self.limits['humidity'][0] - self.limits['humidity'][1],
+                    self.limits['humidity'][0] + self.limits['humidity'][1],
+                ]
 
         if temp[0]:
             if self.switches['heat']['enabled'] and temp_limits:
@@ -340,4 +215,4 @@ class ClimateController(LenferController):
                     self.switches['air_con']['pin'].value(0)
                     LOG.info('Air con off')       
 
-        gc.collect()
+        manage_memory()

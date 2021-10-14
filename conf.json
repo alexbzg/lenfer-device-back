@@ -1,53 +1,57 @@
 {
     "modules": {
+        "feeder": {
+            "modes": ["feeder"],
+            "reverse": false,
+            "buttons": false,
+            "pin": 13
+        },
         "climate": {
-            "enabled": true,
-            "obligatory": true,
+            "modes": ["thermo_relay"],
             "sensor_devices": [
-                {
-                    "type": "aht20",
-                    "i2c": 0,
-                    "sensors_ids": [15, 16]
-                },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [17]
-                },                
-                {
-                    "type": "ds18x20",
-                    "ow": 1,
-                    "sensors_ids": [18]
+                    "sensors_ids": [14]
                 }
             ],
-            "switches": false,
-            "limits": false,
-            "sensors_roles": false,
+            "switches":  {
+                "heat": {
+                    "pin": 13,
+                    "id": 1,
+                    "modes": ["thermo_relay"]
+                },
+                "vent_out": false,                
+                "vent_mix": false,                
+                "humid": false,                
+                "air_con": false
+            },
+            "sensors_roles": {
+                "temperature": [14]
+            },
             "sensors_titles": {
-                "1": "AHT20",
-                "2": "AHT20",
-                "3": "D1",
-                "4": "D2"
+                "14": "низ"
+            },
+            "limits": {
+                "temperature": [20, 0.1],
+                "humidity": false
             },
             "sleep": 750
-        }
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        }        
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 33,
-        "sda": 32
+        "scl": 26,
+        "sda": 25
     }],
-    "ow": [25, 26],
+    "ow": [22],
     "leds": {
-        "status": 13
+        "status": 23
     },
-    "factory_reset": null,
-    "wlan_switch": null,
-    "gsm_modem": {
-        "rst": 19,
-        "pwr_key": 21,
-        "tx": 23,
-        "rx": 22,
-        "on": 18
-    }
+    "factory_reset": 27,
+    "wlan_switch": 22
 }

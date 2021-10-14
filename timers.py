@@ -1,26 +1,26 @@
-import gc
-from machine import Pin, I2C, RTC
+from machine import RTC
 
 import lib.uasyncio as uasyncio
 import lib.ulogging as ulogging
 
-from ds3231_port import DS3231
-
 from lenfer_controller import LenferController
+from utils import manage_memory
 
 LOG = ulogging.getLogger("Main")
 
 class RtcController(LenferController):
 
-    def __init__(self, conf, i2c_conf):
-        i2c_rtc = i2c_conf[conf["i2c"]]
-        self.i2c = I2C(-1, Pin(i2c_rtc["scl"], Pin.OPEN_DRAIN), Pin(i2c_rtc["sda"], Pin.OPEN_DRAIN))
+    def __init__(self, device, conf):
+        LenferController.__init__(self, device)
+        self.i2c = device.i2c[conf["i2c"]]
 
     def get_time(self, set_rtc=False):
+        from ds3231_port import DS3231
         ds3231 = DS3231(self.i2c)
         ds3231.get_time(set_rtc=set_rtc)
 
     def save_time(self):
+        from ds3231_port import DS3231
         ds3231 = DS3231(self.i2c)
         ds3231.save_time()
 
@@ -35,7 +35,7 @@ class RtcController(LenferController):
             if once:
                 break
             await uasyncio.sleep(600)
-            gc.collect()
+            manage_memory()
 
 
 def timer_minutes(entry):
@@ -44,9 +44,8 @@ def timer_minutes(entry):
 def timer_seconds(entry):
     return timer_minutes(entry)*60 + int(entry['sc'])
 
-def time_tuple_to_seconds(time_tuple, sun=False):
-    idx = 3 if sun else 4
-    return time_tuple[idx]*3600 + time_tuple[idx+1]*60
+def time_tuple_to_seconds(time_tuple):
+    return time_tuple[3]*3600 + time_tuple[4]*60
 
 class Timer:
 

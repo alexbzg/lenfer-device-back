@@ -23,7 +23,7 @@ class LenferDevice:
     def module_enabled(self, module_conf):
         if 'enabled' in module_conf and not module_conf['enabled']:
             return False
-        if self.mode and 'modes' in module_conf and module_conf['modes'] and self.mode not in module_conf['modes']:
+        if self.mode and module_conf.get('modes') and self.mode not in module_conf['modes']:
             return False
         return True
 
@@ -59,12 +59,10 @@ class LenferDevice:
             self.mode = self.settings['mode']
 
         if self._conf.get('wlan_switch'):
-            wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP)
-            wlan_switch_button.irq(self.wlan_switch_irq)
+            wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP, handler=self.wlan_switch_irq)
 
         if self._conf.get('factory_reset'):
-            factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN)
-            factory_reset_button.irq(self.factory_reset_irq)
+            factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN, handler=self.factory_reset_irq)
 
         self.modules = {}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
@@ -87,7 +85,7 @@ class LenferDevice:
         if 'rtc' in self._conf['modules'] and self.module_enabled(self._conf['modules']['rtc']):
             try:
                 from timers import RtcController
-                self.modules['rtc'] = RtcController(self._conf['modules']['rtc'], self._conf['i2c'])
+                self.modules['rtc'] = RtcController(self, self._conf['modules']['rtc'])
                 self.modules['rtc'].get_time(set_rtc=True)
                 LOG.info('RTC init')
 
@@ -297,7 +295,7 @@ class LenferDevice:
     def post_tstamp(self, time_tuple=None):
         if not time_tuple:
             time_tuple = machine.RTC().now()
-        return "{0:0>1d}/{1:0>1d}/{2:0>1d} {4:0>1d}:{5:0>1d}:{6:0>1d}".format(*time_tuple) if time_tuple else None
+        return "{0:0>1d}/{1:0>1d}/{2:0>1d} {3:0>1d}:{4:0>1d}:{5:0>1d}".format(*time_tuple) if time_tuple else None
 
     async def srv_post(self, url, data, retry=False):        
         data['device_id'] = self.id['id']
@@ -354,7 +352,7 @@ class LenferDevice:
         loop = uasyncio.get_event_loop()     
         loop.create_task(self.bg_leds())
         loop.create_task(self.check_wlan_switch())
-        if self._network._wlan and (self._network._wlan.mode == network.AP_IF and self._network._wlan.conf['ssid']):
+        if self._network._wlan and (self._network._wlan.mode == AP_IF and self._network._wlan.conf['ssid']):
             loop.create_task(self.delayed_ssid_switch())
         for module_type in self.modules:
             if module_type == 'climate':

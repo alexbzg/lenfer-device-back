@@ -9,7 +9,7 @@ import uio
 import ure as re
 import uerrno
 import lib.uasyncio as asyncio
-import lib.pkg_resources as pkg_resourses
+import lib.pkg_resources as pkg_resources
 
 from .utils import parse_qs
 

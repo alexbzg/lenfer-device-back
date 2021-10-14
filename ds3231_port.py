@@ -66,7 +66,7 @@ class DS3231:
                 secs = utime.mktime(result)
                 utime.localtime(secs)
             else:
-                rtc.datetime((YY, MM, DD, wday, hh, mm, ss, 0))
+                rtc.init((YY, MM, DD, hh, mm, ss))
         return result
 
     def save_time(self):
@@ -105,8 +105,8 @@ class DS3231:
 
         self.await_transition()  # Start on transition of DS3231. Record time in .timebuf
         t = utime.ticks_ms()  # Get system time now
-        ss = rtc.datetime()[6]  # Seconds from system RTC
-        while ss == rtc.datetime()[6]:
+        ss = rtc.datetime()[5]  # Seconds from system RTC
+        while ss == rtc.datetime()[5]:
             pass
         ds = utime.ticks_diff(utime.ticks_ms(), t)  # ms to transition of RTC
         ds3231_start = utime.mktime(self.convert())  # Time when transition occurred
@@ -117,13 +117,13 @@ class DS3231:
 
         self.await_transition()  # of DS3231 and record the time
         t = utime.ticks_ms()  # and get system time now
-        ss = rtc.datetime()[6]  # Seconds from system RTC
-        while ss == rtc.datetime()[6]:
+        ss = rtc.now()[5]  # Seconds from system RTC
+        while ss == rtc.now()[5]:
             pass
         de = utime.ticks_diff(utime.ticks_ms(), t)  # ms to transition of RTC
         ds3231_end = utime.mktime(self.convert())  # Time when transition occurred
-        t = rtc.datetime()
-        rtc_end = utime.mktime((t[0], t[1], t[2], t[4], t[5], t[6], t[3] - 1, 0))  # y m d h m s wday 0
+        t = rtc.now()
+        rtc_end = utime.mktime((t[0], t[1], t[2], t[3], t[4], t[5]))  # y m d h m s wday 0
 
         d_rtc = 1000 * (rtc_end - rtc_start) + de - ds  # ms recorded by RTC
         d_ds3231 = 1000 * (ds3231_end - ds3231_start)  # ms recorded by DS3231

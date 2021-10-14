@@ -1,15 +1,15 @@
 import gc
 import machine
 from machine import Pin, RTC
-import uasyncio
+import lib.uasyncio as uasyncio
 import utime
-import ulogging
+import lib.ulogging as ulogging
 
 
 
 from relay_switch import RelaySwitchController
 from timers import Timer, time_tuple_to_seconds
-from power_monitor import PowerMonitor
+
 from utils import manage_memory
 
 LOG = ulogging.getLogger("Main")
@@ -22,28 +22,31 @@ class FeederTimer(Timer):
 class FeederController(RelaySwitchController):
 
     def __init__(self, device, conf):
-        RelaySwitchController.__init__(self, device)
+        RelaySwitchController.__init__(self, device, conf)
         self._power_monitor = None
-        if conf['power_monitor']: 
+        if conf.get('power_monitor'): 
+            from power_monitor import PowerMonitor
             try: 
                 self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
 
         self._log_queue = []
+        self._active = {}
         self._reverse = Pin(conf['reverse'], Pin.OUT)
         self.reverse = False
-        self._reverse_threshold = device.settings['reverse_threshold']
-        self._reverse_duration = device.settings['reverse_duration']
+        self._reverse_threshold = device.settings.get('reverse_threshold')
+        self._reverse_duration = device.settings.get('reverse_duration')
+        self._expired_limit = device.settings.get('expired_limit')
         self._reverse_delay = 2
         self._delay = 0
         self.flag_pins = None
-        if conf['buttons']:
+        if conf.get('buttons'):
             for idx, pin in enumerate(conf['buttons']):
                 button = Pin(pin, Pin.IN, Pin.PULL_UP)
                 reverse = bool(idx)
                 button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
-        if conf['flag_pins']:
+        if conf.get('flag_pins'):
             self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
 
     def on_button(self, pin, reverse=False):
@@ -70,20 +73,25 @@ class FeederController(RelaySwitchController):
         else:
             if source in self._active:
                 del self._active[source]
+        LOG.debug('Feeder active: %s' % self._active)
+        LOG.debug('Feeder state: %s' % self.state)
         if self.state != bool(self._active):
             if self.state:
+                LOG.debug('feeder pin off')
                 self.pin.value(0)
                 self.reverse = False
                 self.device.append_log_entries("Feeder stop {0}{1}".format(
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                
             else:
+                LOG.debug('feeder pin on')
                 self.pin.value(1)
                 self.device.append_log_entries("Feeder start {0}{1}".format(
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                
         if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
             uasyncio.get_event_loop().create_task(self.check_current())
+        LOG.debug('Feeder state: %s' % self.state)
         manage_memory()
 
     def off(self, source='manual'):
@@ -99,7 +107,7 @@ class FeederController(RelaySwitchController):
     async def check_timers(self):
         off = None
         while True:
-            time = time_tuple_to_seconds(machine.RTC().datetime())
+            time = time_tuple_to_seconds(machine.RTC().now())
             if time == 0:
                 self.init_timers()
             for timer in self.timers:
@@ -107,7 +115,7 @@ class FeederController(RelaySwitchController):
                     start = utime.time()
                     now = start
                     prev_time = start
-                    expired = timer.time_on - time
+                    expired = time - timer.time_on
                     retries = 0
                     self.on(source=timer)
 
@@ -144,7 +152,7 @@ class FeederController(RelaySwitchController):
                 if timer.time_on > time:
                     break
             manage_memory()
-            await uasyncio.sleep(60 - machine.RTC().datetime()[6])
+            await uasyncio.sleep(60 - machine.RTC().now()[6])
 
     async def run_for(self, duration):
         start = utime.time()

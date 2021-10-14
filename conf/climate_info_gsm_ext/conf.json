@@ -2,6 +2,7 @@
     "modules": {
         "climate": {
             "enabled": true,
+            "obligatory": true,
             "sensor_devices": [
                 {
                     "type": "aht20",
@@ -37,22 +38,16 @@
         "sda": 32
     }],
     "ow": [25, 26],
-    "leds": {},
+    "leds": {
+        "status": 13
+    },
     "factory_reset": null,
     "wlan_switch": null,
-    " _gsm_modem": {
-        
-        "pins": {
-            "MODEM_PWKEY_PIN": null,
-            "MODEM_RST_PIN": null,
-            "MODEM_POWER_ON_PIN": null,
-            "MODEM_TX_PIN": 22,
-            "MODEM_RX_PIN": 23
-        },
-        "apn": {
-            "apn": "internet.mts.ru", 
-            "user": "mts", 
-            "pwd": "mts"
-        }
+    "gsm_modem": {
+        "rst": 19,
+        "pwr_key": 21,
+        "tx": 23,
+        "rx": 22,
+        "on": 18
     }
 }

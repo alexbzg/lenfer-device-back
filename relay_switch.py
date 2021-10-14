@@ -3,7 +3,7 @@ import utime
 import machine
 from machine import Pin
 
-import uasyncio
+import lib.uasyncio as uasyncio
 
 from Suntime import Sun
 
@@ -17,12 +17,12 @@ class RelaySwitchController(LenferController):
     def __init__(self, device, conf):
         LenferController.__init__(self, device)
         self._conf = conf
-        self.pin = Pin(conf['pin'], Pin.OUT)
-        self.pin.off()
+        self.pin = Pin(conf['pin'], Pin.INOUT)
+        self.pin.value(0)
         self.timers = []
         self._schedule_params = None
         self._timers_param = None
-        if 'schedule_params' in conf and conf['schedule_params']:
+        if conf.get('schedule_params'):
             self._schedule_params = conf['schedule_params']
             self._schedule_params_idx = [self.device.schedule.param_idx(param) for param in self._schedule_params]
         else:
@@ -33,11 +33,10 @@ class RelaySwitchController(LenferController):
         self.timers = []
         sun_data = None
         self.time_table = []
-        if ('location' in self.device.settings and self.device.settings['location']
-            and 'timezone' in self.device.settings and self.device.settings['timezone']):
+        if self.device.settings.get('location') and self.device.settings.get('timezone'):
             sun = Sun(self.device.settings['location'][0], self.device.settings['location'][1], 
                 self.device.settings['timezone'])
-            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time(), sun=True), time_tuple_to_seconds(sun.get_sunset_time(), sun=True)]
+            sun_data = [time_tuple_to_seconds(sun.get_sunrise_time()), time_tuple_to_seconds(sun.get_sunset_time())]
         for timer_conf in self.device.settings[self._timers_param]:
             timer = self.create_timer(timer_conf)
             if timer.sun:
@@ -59,7 +58,7 @@ class RelaySwitchController(LenferController):
 
     async def adjust_switch(self, once=False):
         while True:
-            now = time_tuple_to_seconds(machine.RTC().datetime())
+            now = time_tuple_to_seconds(machine.RTC().now())
             if self._schedule_params:
                 day = self.device.schedule.current_day()
                 if day:
@@ -83,7 +82,7 @@ class RelaySwitchController(LenferController):
             if once:
                 break               
             manage_memory()
-            await uasyncio.sleep(60 - machine.RTC().datetime()[6])
+            await uasyncio.sleep(60 - machine.RTC().now()[5])
 
     def update_settings(self):
         if self._timers_param in self.device.settings:

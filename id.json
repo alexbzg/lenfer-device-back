@@ -1,8 +1,2 @@
-{
-    "type": "climate_info_gsm",
-    "id": 29,
-    "updates": true,
-    "hash": "zyO9PL",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjI5fQ.JGrE2Nh3uAYUsxl9ddtpEFQkmKHrJnfnna5R55ndSDk",
-    "disable_software_updates": true
-}
+{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjMxfQ.APe_1Tpaf6sQ5YsJ6L73p3Ees4a8f2vW73BQbYfKW34", "updates": true, "hash": "zyA9ym", "id": 31, "type": "thermo_relay"
+"disable_software_updates": true}

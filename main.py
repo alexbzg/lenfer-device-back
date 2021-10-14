@@ -58,7 +58,7 @@ async def get_wlan_settings(req, rsp):
         uasyncio.get_event_loop().create_task(delayed_reset(5))
         await send_json(rsp, {"reset": True})
     else:
-        await send_json(rsp, WLAN.conf)
+        await send_json(rsp, NETWORK_CONTROLLER._wlan.conf)
 
 async def delayed_reset(delay):
     await uasyncio.sleep(delay)
@@ -73,8 +73,8 @@ async def get_time(req, rsp):
         if ctrl:
             ctrl.set_time(req.json)
         else:
-            machine.RTC().datetime(req.json)
-    await send_json(rsp, machine.RTC().datetime())
+            machine.RTC().init(req.json)
+    await send_json(rsp, machine.RTC().now())
 
 @APP.route('/')
 async def get_index(req, rsp):
