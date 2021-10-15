@@ -69,6 +69,7 @@ class HttpClient:
         rsp = None
         result = None
         try:
+            LOG.info("url: %s\ndata: %s" % (url, data))
             rsp = urequests.post(url, json=data, parse_headers=False)
             machine.resetWDT()
             if rsp.status_code != 200:

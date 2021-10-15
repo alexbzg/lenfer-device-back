@@ -231,7 +231,6 @@ class LenferDevice:
                 }
                 updates = await self.srv_post('device_updates', data, retry=once)
                 if updates:
-                    LOG.info(updates)
                     if updates.get('schedule'):
                         self.schedule.update(updates['schedule'])
                     if 'props' in updates and updates['props']:
@@ -271,7 +270,7 @@ class LenferDevice:
                 for ctrl in self.modules.values():
                     if ctrl and hasattr(ctrl, 'switches'):
                         data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
-                            for switch in ctrl.switches.values() if switch]
+                            for switch in ctrl.switches.values() if switch['enabled']]
                 if data['data']:
                     await self.srv_post('switches_state', data, retry=once)
             except Exception as exc:

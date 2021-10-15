@@ -15,7 +15,7 @@ class Schedule:
         self._schedule = value
 
     def current_day(self):
-        if self._schedule and 'items' in self._schedule and self._schedule['items'] and 'start' in self._schedule and self._schedule['start']:
+        if self._schedule and self._schedule.get('items') and self._schedule.get('start'):
             day_no = 0
             start = utime.mktime(self._schedule['start'])
             today = utime.mktime(machine.RTC().datetime())

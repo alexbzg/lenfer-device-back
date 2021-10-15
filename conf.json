@@ -12,13 +12,13 @@
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [14]
+                    "sensors_ids": [20]
                 }
             ],
             "switches":  {
                 "heat": {
                     "pin": 13,
-                    "id": 1,
+                    "id": 6,
                     "modes": ["thermo_relay"]
                 },
                 "vent_out": false,                
@@ -27,10 +27,10 @@
                 "air_con": false
             },
             "sensors_roles": {
-                "temperature": [14]
+                "temperature": [20]
             },
             "sensors_titles": {
-                "14": "низ"
+                "20": "D1"
             },
             "limits": {
                 "temperature": [20, 0.1],
