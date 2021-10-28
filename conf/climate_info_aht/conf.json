@@ -6,53 +6,46 @@
                 {
                     "type": "aht20",
                     "i2c": 0,
-                    "sensors_ids": [15, 16]
+                    "sensors_ids": [6, 7]
                 },
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [17]
+                    "sensors_ids": [8]
                 },                
                 {
                     "type": "ds18x20",
                     "ow": 1,
-                    "sensors_ids": [18]
+                    "sensors_ids": [9]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [10]
                 }
             ],
             "switches": false,
             "limits": false,
             "sensors_roles": false,
             "sensors_titles": {
-                "1": "AHT20",
-                "2": "AHT20",
+                "1": "BME280",
+                "2": "BME280",
                 "3": "D1",
-                "4": "D2"
+                "4": "D2",
+                "5": "D3"
             },
             "sleep": 750
         }
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 33,
-        "sda": 32
+        "scl": 23,
+        "sda": 22
     }],
-    "ow": [25, 26],
-    "leds": {},
-    "factory_reset": null,
-    "wlan_switch": null,
-    " _gsm_modem": {
-        
-        "pins": {
-            "MODEM_PWKEY_PIN": null,
-            "MODEM_RST_PIN": null,
-            "MODEM_POWER_ON_PIN": null,
-            "MODEM_TX_PIN": 22,
-            "MODEM_RX_PIN": 23
-        },
-        "apn": {
-            "apn": "internet.mts.ru", 
-            "user": "mts", 
-            "pwd": "mts"
-        }
-    }
+    "ow": [16, 17, 18],
+    "leds": {
+        "status": 32
+    },
+    "factory_reset": 27,
+    "wlan_switch": 33
 }

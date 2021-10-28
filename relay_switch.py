@@ -1,5 +1,3 @@
-import gc
-import utime
 import machine
 from machine import Pin
 
@@ -9,7 +7,7 @@ from Suntime import Sun
 
 from lenfer_controller import LenferController
 from utils import manage_memory
-from timers import Timer, time_tuple_to_seconds
+from timers import time_tuple_to_seconds
 
 
 class RelaySwitchController(LenferController):

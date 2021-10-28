@@ -1,0 +1,41 @@
+{
+    "modules": {
+        "climate": {
+            "enabled": true,
+            "sensor_devices": [
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [21]
+                },                
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [22]
+                },                
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [23]
+                }
+            ],
+            "switches": false,
+            "limits": false,
+            "sensors_roles": false,
+            "sensors_titles": {
+                "21": "D0",
+                "22": "D1",
+                "23": "D2"
+            },
+            "sleep": 750
+        }
+    },
+    "sleep": 750,
+    "ow": [16, 18, 13],
+    "i2c": [],
+    "leds": {
+        "status": 33
+    },
+    "factory_reset": 21,
+    "wlan_switch": 22
+}

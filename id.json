@@ -1,2 +1,8 @@
-{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjMxfQ.APe_1Tpaf6sQ5YsJ6L73p3Ees4a8f2vW73BQbYfKW34", "updates": true, "hash": "zyA9ym", "id": 31, "type": "thermo_relay"
-"disable_software_updates": true}
+{
+    "id": 11, 
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjExfQ.J4jKLdtwPukshFzVBozR_S9AvxD9O3syvHTExx8quQc",
+    "hash": "4Pk4BY",
+    "type": "feeder",
+    "updates": true,
+    "disable_software_updates": true
+}

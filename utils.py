@@ -1,11 +1,11 @@
 import gc
 
-import micropython
 import ujson
-import lib.ulogging as ulogging
+import logging
+
+LOG = logging.getLogger("Main")
 
 def load_json(path):
-    LOG = ulogging.getLogger("Main")
     try:
         with open(path, 'r', encoding="utf-8") as _file:
             return ujson.load(_file)
@@ -14,7 +14,6 @@ def load_json(path):
         return None
 
 def save_json(data, path):
-    LOG = ulogging.getLogger("Main")
     try:
         with open(path, 'w', encoding="utf-8") as _file:
             _file.write(ujson.dumps(data))

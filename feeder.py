@@ -1,18 +1,16 @@
 import gc
 import machine
-from machine import Pin, RTC
+from machine import Pin
 import lib.uasyncio as uasyncio
 import utime
-import lib.ulogging as ulogging
-
-
+import logging
 
 from relay_switch import RelaySwitchController
 from timers import Timer, time_tuple_to_seconds
 
 from utils import manage_memory
 
-LOG = ulogging.getLogger("Main")
+LOG = logging.getLogger("Feeder")
 
 class FeederTimer(Timer):
 
@@ -25,9 +23,10 @@ class FeederController(RelaySwitchController):
         RelaySwitchController.__init__(self, device, conf)
         self._power_monitor = None
         if conf.get('power_monitor'): 
+            manage_memory()
             from power_monitor import PowerMonitor
             try: 
-                self._power_monitor = PowerMonitor(conf['power_monitor'], device._conf['i2c'])
+                self._power_monitor = PowerMonitor(conf['power_monitor'], device.i2c)
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
 
@@ -43,11 +42,13 @@ class FeederController(RelaySwitchController):
         self.flag_pins = None
         if conf.get('buttons'):
             for idx, pin in enumerate(conf['buttons']):
-                button = Pin(pin, Pin.IN, Pin.PULL_UP)
                 reverse = bool(idx)
-                button.irq(lambda pin, reverse=reverse: self.on_button(pin, reverse))
+                button = Pin(pin, Pin.IN, Pin.PULL_UP, handler=self.on_button_reverse if reverse else self.on_button)
         if conf.get('flag_pins'):
             self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
+
+    def on_button_reverse(self, pin):
+        self.on_button(pin, True)
 
     def on_button(self, pin, reverse=False):
         print('button {0} {1} {2}'.format(

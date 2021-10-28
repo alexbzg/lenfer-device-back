@@ -4,14 +4,14 @@ import machine
 from machine import WDT, Pin, I2C
 
 import lib.uasyncio as uasyncio
-import lib.ulogging as ulogging
+import logging
 
 from utils import load_json, save_json, manage_memory
 from software_update import check_software_update, schedule_software_update
 from schedule import Schedule
 from http_client import HttpClient
 
-LOG = ulogging.getLogger("Main")
+LOG = logging.getLogger("Device")
 
 SERVER_URI = "http://my.lenfer.ru/api/"
 SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"

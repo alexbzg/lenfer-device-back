@@ -3,10 +3,10 @@ import sys
 import network
 import machine
 
-import lib.ulogging as ulogging
-LOG = ulogging.getLogger("Network")
+import logging
+LOG = logging.getLogger("Network")
 
-from utils import load_json, save_json, manage_memory
+from utils import load_json, save_json
 
 class WlanController:
 
@@ -37,6 +37,7 @@ class WlanController:
 
         if self.nic and self.nic.isconnected():
             self.mode = network.STA_IF
+            print(self.nic.ifconfig())
         else:
             if self.nic:
                 self.nic.active(False)
@@ -68,7 +69,7 @@ class WlanController:
 def wlan_enabled_switch_handler():
     machine.reset()
 
-class NetworkController():
+class NetworkController:
 
     def gsm_pwr_key_cycle(self):
         if self.gsm and self._gsm_pwr_key:

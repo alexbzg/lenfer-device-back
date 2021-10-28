@@ -3,12 +3,12 @@ import machine
 import uos
 import machine
 
-import lib.ulogging as ulogging
+import logging
 
 from utils import load_json, save_json, manage_memory
 from http_client import HttpClient
 
-LOG = ulogging.getLogger("Main")
+LOG = logging.getLogger("Software update")
 
 UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'

@@ -1,12 +1,12 @@
 from machine import RTC
 
 import lib.uasyncio as uasyncio
-import lib.ulogging as ulogging
+import logging
 
 from lenfer_controller import LenferController
 from utils import manage_memory
 
-LOG = ulogging.getLogger("Main")
+LOG = logging.getLogger("Timers")
 
 class RtcController(LenferController):
 

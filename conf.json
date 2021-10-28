@@ -1,42 +1,15 @@
 {
     "modules": {
         "feeder": {
-            "modes": ["feeder"],
-            "reverse": false,
-            "buttons": false,
-            "pin": 13
-        },
-        "climate": {
-            "modes": ["thermo_relay"],
-            "sensor_devices": [
-                {
-                    "type": "ds18x20",
-                    "ow": 0,
-                    "sensors_ids": [20]
-                }
-            ],
-            "switches":  {
-                "heat": {
-                    "pin": 13,
-                    "id": 6,
-                    "modes": ["thermo_relay"]
-                },
-                "vent_out": false,                
-                "vent_mix": false,                
-                "humid": false,                
-                "air_con": false
-            },
-            "sensors_roles": {
-                "temperature": [20]
-            },
-            "sensors_titles": {
-                "20": "D1"
-            },
-            "limits": {
-                "temperature": [20, 0.1],
-                "humidity": false
-            },
-            "sleep": 750
+            "enabled": true,
+            "reverse": 21,
+            "buttons": [27, 26],
+            "pin": 22,
+            "adc": 35,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            }
         },
         "rtc": {
             "enabled": true,
@@ -45,13 +18,13 @@
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 26,
-        "sda": 25
+        "scl": 32,
+        "sda": 33
     }],
-    "ow": [22],
+    "ow": [],
     "leds": {
         "status": 23
     },
-    "factory_reset": 27,
-    "wlan_switch": 22
+    "factory_reset": 17,
+    "wlan_switch": 19
 }

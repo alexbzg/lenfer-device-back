@@ -1,13 +1,13 @@
 import ujson
-import lib.ulogging as ulogging
-import lib.prequests as urequests
+import logging
+import urequests
 import utime
 import lib.uasyncio as uasyncio
 import machine
 
 from utils import load_json
 
-LOG = ulogging.getLogger("Main")
+LOG = logging.getLogger("Main")
 
 def response_success(rsp):
     return rsp and rsp.status_code == 200
@@ -70,7 +70,7 @@ class HttpClient:
         result = None
         try:
             LOG.info("url: %s\ndata: %s" % (url, data))
-            rsp = urequests.post(url, json=data, parse_headers=False)
+            rsp = urequests.post(url, json=data)
             machine.resetWDT()
             if rsp.status_code != 200:
                 self.log_exception(None, url, data, rsp.status_code)
