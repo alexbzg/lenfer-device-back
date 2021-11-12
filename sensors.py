@@ -1,8 +1,7 @@
 from machine import Pin, Onewire
+import logging
 
-import BME280
-import ahtx0
-from CCS811 import CCS811
+LOG = logging.getLogger("Sensors")
 
 class SensorDevice:
     "generic sensor handler"
@@ -27,6 +26,7 @@ class SensorDeviceBME280(SensorDevice):
         "reads sensors data and stores in into controller data field"
         humid, temp = None, None
         try:
+            import BME280
             bme = BME280.BME280(i2c=self._i2c)
             temp = round((bme.read_temperature() / 100), 1)
             humid = int(bme.read_humidity() // 1024)
@@ -43,6 +43,7 @@ class SensorDeviceAHT20(SensorDevice):
     def __init__(self, conf, controller, i2c_list):
         SensorDevice.__init__(self, conf, controller)
         try:
+            import ahtx0
             self._ahtx0 = ahtx0.AHT20(i2c_list[conf['i2c']])
         except Exception as exc:
             LOG.exc(exc, 'AHTX0 initialization error')
@@ -67,6 +68,7 @@ class SensorDeviceCCS811(SensorDevice):
         SensorDevice.__init__(self, conf, controller)
         self._ccs811 = None
         try:
+            from CCS811 import CCS811
             self._ccs811 = CCS811(i2c_list[conf['i2c']])
         except Exception as exc:
             LOG.exc(exc, 'CCS811 initialization error')

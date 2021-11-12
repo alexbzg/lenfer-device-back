@@ -2,7 +2,7 @@ import machine
 from machine import Pin, Onewire
 
 import lib.uasyncio as uasyncio
-import lib.ulogging as ulogging
+import logging
 
 import BME280
 import ahtx0
@@ -11,7 +11,7 @@ from lenfer_controller import LenferController
 from utils import manage_memory
 from timers import time_tuple_to_seconds
 
-LOG = ulogging.getLogger("Climate")
+LOG = logging.getLogger("Climate")
 
 
 class ClimateController(LenferController):

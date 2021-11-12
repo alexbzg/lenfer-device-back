@@ -36,24 +36,31 @@ class HttpClient:
     def get_to_file(self, url, local_path):
 
         with open(local_path, 'wb') as local_file:
+            new_line = False
             try:
                 rsp = urequests.get(url)
                 if response_success(rsp):
+                    rsp.raw.settimeout(60)
                     buf = rsp.raw.read(1024)
                     while buf:
                         local_file.write(buf)
+                        print('.', end="")
+                        new_line = True
                         buf = rsp.raw.read(1024)
                     return True
             except Exception as exc:
                 self.log_exception(exc, url)
             finally:
+                if new_line:
+                    print("")
                 if rsp:
-                    rsp.close()
-            
+                    rsp.close()           
+
     def get_json(self, url):
+        rsp = None
         try:
             rsp = urequests.get(url)
-            if response_success(url):
+            if response_success(rsp):
                 return ujson.load(rsp.raw)
         except Exception as exc:
             self.log_exception(exc, url)

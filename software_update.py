@@ -10,7 +10,7 @@ from http_client import HttpClient
 
 LOG = logging.getLogger("Software update")
 
-UPDATES_SERVER_URL = 'http://my.lenfer.ru/device2/'
+UPDATES_SERVER_URL = 'http://my.lenfer.ru/device3/'
 UPDATES_SERVER_URL_DEV = 'http://my.lenfer.ru/dev_device/'
 
 HTTP_CLIENT = None
@@ -73,15 +73,15 @@ def perform_software_update():
     global HTTP_CLIENT
     if not HTTP_CLIENT:
         HTTP_CLIENT = HttpClient()
-    wdt = machine.WDT(timeout=20*60*1000)
+    machine.WDT()
     manage_memory()
     version_data = load_version()
     device_type = get_device_type()
     srv_url = updates_url()
     srv_index = load_srv_json('index', srv_url=srv_url)
-    wdt.feed()
+    machine.resetWDT()
     srv_versions = load_srv_json('devices', srv_url=srv_url)
-    wdt.feed()
+    machine.resetWDT()
     if srv_index:
         for path, entry in srv_index.items():
             if 'devices_types' in entry and 'base' not in entry['devices_types'] and device_type not in entry['devices_types']:
@@ -93,13 +93,19 @@ def perform_software_update():
             ensure_file_path(local_path)
             file_url = srv_url + 'software/' + path
             print(file_url)
-            if HTTP_CLIENT.get_to_file(file_url, local_path):
-                if version_data['hash']:
-                    version_data['hash'] = None
-                version_data['files'][path] = entry['hash']
-                save_version(version_data)
-                print('complete')
-        wdt.feed()
+            while version_data['files'].get(path) != entry['hash']:
+                if HTTP_CLIENT.get_to_file(file_url, 'file_buf'):
+                    try:
+                        uos.remove(local_path)
+                    except OSError:
+                        pass
+                    uos.rename('file_buf', local_path)
+                    if version_data['hash']:
+                        version_data['hash'] = None
+                    version_data['files'][path] = entry['hash']
+                    save_version(version_data)
+                    print('complete')
+        machine.resetWDT()
         version_data['hash'] = srv_versions[device_type]
         version_data['update'] = False
         save_version(version_data)

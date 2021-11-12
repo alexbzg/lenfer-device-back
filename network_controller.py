@@ -6,7 +6,7 @@ import machine
 import logging
 LOG = logging.getLogger("Network")
 
-from utils import load_json, save_json
+from utils import load_json, save_json, manage_memory
 
 class WlanController:
 
@@ -37,7 +37,6 @@ class WlanController:
 
         if self.nic and self.nic.isconnected():
             self.mode = network.STA_IF
-            print(self.nic.ifconfig())
         else:
             if self.nic:
                 self.nic.active(False)
@@ -69,7 +68,7 @@ class WlanController:
 def wlan_enabled_switch_handler():
     machine.reset()
 
-class NetworkController:
+class NetworkController():
 
     def gsm_pwr_key_cycle(self):
         if self.gsm and self._gsm_pwr_key:
@@ -123,9 +122,10 @@ class NetworkController:
     def __init__(self):
         self._conf = {}
         conf = load_json('conf.json')
-        for conf_item in ('wlan_enabled_switch', 'gsm_modem'):
-            if conf_item in conf:
-                self._conf[conf_item] = conf[conf_item]
+        if conf:
+            for conf_item in ('wlan_enabled_switch', 'gsm_modem'):
+                if conf_item in conf:
+                    self._conf[conf_item] = conf[conf_item]
         self._wlan = None
         self._wlan_enabled_switch = None
         self.gsm = False
@@ -186,10 +186,4 @@ class NetworkController:
             return gsm.status()[0] == 1
         if self._wlan:
             return self._wlan.online()
-        return False
-
-
-
-
-
-            
+        return False          
