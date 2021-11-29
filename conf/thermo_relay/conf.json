@@ -4,7 +4,7 @@
             "modes": ["feeder"],
             "reverse": false,
             "buttons": false,
-            "pin": 13
+            "pin": 22
         },
         "climate": {
             "modes": ["thermo_relay"],
@@ -12,12 +12,12 @@
                 {
                     "type": "ds18x20",
                     "ow": 0,
-                    "sensors_ids": [14]
+                    "sensors_ids": [20]
                 }
             ],
             "switches":  {
                 "heat": {
-                    "pin": 13,
+                    "pin": 22,
                     "id": 1,
                     "modes": ["thermo_relay"]
                 },
@@ -27,7 +27,7 @@
                 "air_con": false
             },
             "sensors_roles": {
-                "temperature": [14]
+                "temperature": [20]
             },
             "sensors_titles": {
                 "14": "низ"
@@ -45,13 +45,13 @@
     },
     "sleep": 750,
     "i2c": [{
-        "scl": 26,
-        "sda": 25
+        "scl": 17,
+        "sda": 16
     }],
-    "ow": [22],
+    "ow": [18],
     "leds": {
-        "status": 23
+        "status": 13
     },
-    "factory_reset": 27,
-    "wlan_switch": 22
+    "factory_reset": 26,
+    "wlan_switch": 27
 }

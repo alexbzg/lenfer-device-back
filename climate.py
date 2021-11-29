@@ -4,9 +4,6 @@ from machine import Pin, Onewire
 import lib.uasyncio as uasyncio
 import logging
 
-import BME280
-import ahtx0
-from CCS811 import CCS811
 from lenfer_controller import LenferController
 from utils import manage_memory
 from timers import time_tuple_to_seconds
