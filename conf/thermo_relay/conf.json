@@ -1,6 +1,6 @@
 {
     "modules": {
-        "feeder": {
+        "relay_switch": {
             "modes": ["feeder"],
             "reverse": false,
             "buttons": false,
@@ -18,7 +18,7 @@
             "switches":  {
                 "heat": {
                     "pin": 22,
-                    "id": 1,
+                    "id": 6,
                     "modes": ["thermo_relay"]
                 },
                 "vent_out": false,                
@@ -30,7 +30,7 @@
                 "temperature": [20]
             },
             "sensors_titles": {
-                "14": "низ"
+                "20": "низ"
             },
             "limits": {
                 "temperature": [20, 0.1],

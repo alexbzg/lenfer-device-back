@@ -7,7 +7,7 @@ from Suntime import Sun
 
 from lenfer_controller import LenferController
 from utils import manage_memory
-from timers import time_tuple_to_seconds
+from timers import time_tuple_to_seconds, Timer
 
 
 class RelaySwitchController(LenferController):
@@ -26,6 +26,9 @@ class RelaySwitchController(LenferController):
         else:
             self._timers_param = conf['timers_param'] if 'timers_param' in conf else 'timers'
             self.init_timers()
+    
+    def create_timer(self, conf):
+        return Timer(conf, self)
 
     def init_timers(self):
         self.timers = []
@@ -48,11 +51,9 @@ class RelaySwitchController(LenferController):
         self.timers.sort(key=lambda timer: timer.time_on)
 
     def delete_timer(self, timer_idx, change_settings=True):
-        self.off(source=self.timers[timer_idx])
         if change_settings:
             del self.device.settings[self._timers_param][timer_idx]
         del self.timers[timer_idx]
-
 
     async def adjust_switch(self, once=False):
         while True:

@@ -188,6 +188,10 @@ class FeederController(RelaySwitchController):
     def create_timer(self, conf):
         return FeederTimer(conf, self)
 
+    def delete_timer(self, timer_idx, change_settings=True):
+        self.off(source=self.timers[timer_idx])
+        RelaySwitchController.delete_timer(self, timer_idx, change_settings)
+
     @property
     def reverse(self):
         return self._reverse.value()
