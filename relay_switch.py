@@ -1,5 +1,6 @@
 import machine
 from machine import Pin
+import logging
 
 import lib.uasyncio as uasyncio
 
@@ -9,6 +10,7 @@ from lenfer_controller import LenferController
 from utils import manage_memory
 from timers import time_tuple_to_seconds, Timer
 
+LOG = logging.getLogger("Relay")
 
 class RelaySwitchController(LenferController):
 
@@ -55,9 +57,23 @@ class RelaySwitchController(LenferController):
             del self.device.settings[self._timers_param][timer_idx]
         del self.timers[timer_idx]
 
+    def on(self, value=True):
+        if self.pin.value() != value:
+            if self.pin.value():
+                self.pin.value(0)
+                self.device.append_log_entries("Feeder stop timer")                
+            else:
+                self.pin.value(1)
+                self.device.append_log_entries("Feeder start timer")
+        manage_memory()
+
+    def off(self):
+        self.on(False)    
+
     async def adjust_switch(self, once=False):
         while True:
             now = time_tuple_to_seconds(machine.RTC().now())
+            next_time_on = None
             if self._schedule_params:
                 day = self.device.schedule.current_day()
                 if day:
@@ -72,16 +88,23 @@ class RelaySwitchController(LenferController):
                 if now == 0:
                     self.init_timers()
                 passed_timers = [timer for timer in self.timers if timer.time_on <= now]
-                if not passed_timers:
+                if not passed_timers and self.timers:
                     passed_timers = [self.timers[-1]]
                 if passed_timers:
-                    last_state = passed_timers[-1].duration == 0
+                    last_timer = passed_timers[-1]
+                    last_state = last_timer.duration == 0
                     if last_state != self.pin.value():
-                        self.pin.value(last_state)
+                        self.on(last_state)
+                    next_timers = [timer for timer in self.timers if timer.time_on > now]
+                    if next_timers and next_timers[0].time_on - last_timer.time_on < 60:
+                        next_time_on = next_timers[0].time_on - last_timer.time_on
             if once:
                 break               
             manage_memory()
-            await uasyncio.sleep(60 - machine.RTC().now()[5])
+            if next_time_on:
+                await next_time_on
+            else:    
+                await uasyncio.sleep(60 - machine.RTC().now()[5])
 
     def update_settings(self):
         if self._timers_param in self.device.settings:
