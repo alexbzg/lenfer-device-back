@@ -72,18 +72,16 @@ class RelaySwitchController(LenferController):
 
     async def adjust_switch(self, once=False):
         while True:
-            now = time_tuple_to_seconds(machine.RTC().now())
+            now = time_tuple_to_seconds(machine.RTC().now(), seconds=True)
             next_time_on = None
             if self._schedule_params:
                 day = self.device.schedule.current_day()
                 if day:
                     limits = [day[idx] if idx and day[idx] else None for idx in self._schedule_params_idx]
                     if limits[0] and ((limits[0] <= now and not limits[1]) or (limits[0] <= now < limits[1]) or (limits[0] < limits[1] <= now)):
-                        if not self.pin.value():
-                            self.pin.value(1)
+                        self.on()
                     if limits[1] and ((limits[1] <= now and not limits[0]) or (limits[1] <= now < limits[0]) or (limits[1] < limits[0] <= now)):
-                        if self.pin.value():
-                            self.pin.value(0)
+                        self.off()
             else:
                 if now == 0:
                     self.init_timers()
@@ -92,9 +90,7 @@ class RelaySwitchController(LenferController):
                     passed_timers = [self.timers[-1]]
                 if passed_timers:
                     last_timer = passed_timers[-1]
-                    last_state = last_timer.duration == 0
-                    if last_state != self.pin.value():
-                        self.on(last_state)
+                    self.on(last_timer.duration == 0)
                     next_timers = [timer for timer in self.timers if timer.time_on > now]
                     if next_timers and next_timers[0].time_on - last_timer.time_on < 60:
                         next_time_on = next_timers[0].time_on - last_timer.time_on
@@ -102,7 +98,7 @@ class RelaySwitchController(LenferController):
                 break               
             manage_memory()
             if next_time_on:
-                await next_time_on
+                await uasyncio.sleep(next_time_on)
             else:    
                 await uasyncio.sleep(60 - machine.RTC().now()[5])
 
