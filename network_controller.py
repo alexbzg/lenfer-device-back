@@ -91,7 +91,7 @@ class NetworkController():
                 self._gsm_pwr.value(0)
             if self._gsm_modem_on:
                 for uart_pin_type in ('tx', 'rx'):
-                    uart_pin = machine.Pin(self._conf['gsm_modem'][uart_pin_type], machine.Pin.OUT, value=0)
+                    machine.Pin(self._conf['gsm_modem'][uart_pin_type], machine.Pin.OUT, value=0)
                 self._gsm_modem_on.value(0)            
 
     def gsm_start(self, apn_settings):
@@ -132,7 +132,8 @@ class NetworkController():
         self._gsm_settings = {}
         enable_wlan = False
         if self._conf.get('wlan_enabled_switch'):
-            self._wlan_enabled_switch = machine.Pin(self._conf['wlan_enabled_switch'], handler=wlan_enabled_switch_handler)
+            self._wlan_enabled_switch = machine.Pin(self._conf['wlan_enabled_switch'], handler=wlan_enabled_switch_handler,
+                trigger=machine.Pin.IRQ_FALLING)
             enable_wlan = self._wlan_enabled_switch.value()
             machine.RTC().wake_on_ext0(self._wlan_enabled_switch, 1)
         if not enable_wlan and self._conf.get('gsm_modem'):

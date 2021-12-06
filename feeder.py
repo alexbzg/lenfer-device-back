@@ -41,9 +41,11 @@ class FeederController(RelaySwitchController):
         self._delay = 0
         self.flag_pins = None
         if conf.get('buttons'):
+            self._buttons = []
             for idx, pin in enumerate(conf['buttons']):
                 reverse = bool(idx)
-                button = Pin(pin, Pin.IN, Pin.PULL_UP, handler=self.on_button_reverse if reverse else self.on_button)
+                self._buttons.add(Pin(pin, Pin.IN, Pin.PULL_UP, 
+                    handler=self.on_button_reverse if reverse else self.on_button, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING))
         if conf.get('flag_pins'):
             self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
 

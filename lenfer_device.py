@@ -59,10 +59,12 @@ class LenferDevice:
             self.mode = self.settings['mode']
 
         if self._conf.get('wlan_switch'):
-            wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP, handler=self.wlan_switch_irq)
+            self._wlan_switch_button = Pin(self._conf['wlan_switch'], Pin.IN, Pin.PULL_UP, 
+                handler=self.wlan_switch_irq, trigger=Pin.IRQ_FALLING)
 
         if self._conf.get('factory_reset'):
-            factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN, handler=self.factory_reset_irq)
+            self._factory_reset_button = Pin(self._conf['factory_reset'], Pin.IN, 
+                handler=self.factory_reset_irq, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
 
         self.modules = {}
         self.i2c = [I2C(scl=Pin(i2c_conf['scl']), sda=Pin(i2c_conf['sda']))
@@ -143,6 +145,7 @@ class LenferDevice:
             LOG.info(entry)
 
     def wlan_switch_irq(self, pin):
+        LOG.info("WLAN switch irq %s" % pin.value())
         if not pin.value():
             LOG.info('wlan switch was activated')
             self.status['wlan_switch'] = 'true'
@@ -151,7 +154,7 @@ class LenferDevice:
         while True:
             await uasyncio.sleep(5)
             if self.status['wlan_switch']:
-                self._wlan.enable_ssid(not self._wlan.conf['enable_ssid'])
+                self._network._wlan.enable_ssid(not self._network._wlan.conf['enable_ssid'])
 
     async def delayed_ssid_switch(self):
         LOG.info("delayed wlan switch activated")
@@ -163,6 +166,7 @@ class LenferDevice:
                 self._network._wlan.enable_ssid(True)
 
     def factory_reset_irq(self, pin):
+        LOG.info("factory reset irq %s" % pin.value())
         if pin.value():
             if self.status['factory_reset'] == 'pending':
                 self.status['factory_reset'] = 'cancel'
@@ -182,7 +186,8 @@ class LenferDevice:
         for led in self.leds.values():
             led.on()
         self.load_def_settings()
-        self._wlan.load_def_conf()
+        if self._network._wlan:
+            self._network._wlan.load_def_conf()
         machine.reset()
 
     async def blink(self, leds, count, time_ms):
