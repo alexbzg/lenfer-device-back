@@ -5,7 +5,7 @@ import lib.uasyncio as uasyncio
 import utime
 import logging
 
-from relay_switch import RelaySwitchController
+from gate_controller import GateController
 from timers import Timer, time_tuple_to_seconds
 
 from utils import manage_memory
@@ -17,58 +17,11 @@ class FeederTimer(Timer):
     def _on_off(self):
         uasyncio.get_event_loop().create_task(self.relay.run_for(self.duration))
 
-class FeederController(RelaySwitchController):
+class FeederController(GateController):
 
     def __init__(self, device, conf):
-        RelaySwitchController.__init__(self, device, conf)
-        self._power_monitor = None
-        if conf.get('power_monitor'): 
-            manage_memory()
-            from power_monitor import PowerMonitor
-            try: 
-                self._power_monitor = PowerMonitor(conf['power_monitor'], device.i2c)
-            except Exception as exc:
-                LOG.exc(exc, 'Power monitor init error')
-
-        self._log_queue = []
+        GateController.__init__(self, device, conf)
         self._active = {}
-        self._reverse = Pin(conf['reverse'], Pin.OUT)
-        self.reverse = False
-        self._reverse_threshold = device.settings.get('reverse_threshold')
-        self._reverse_duration = device.settings.get('reverse_duration')
-        self._expired_limit = device.settings.get('expired_limit')
-        self._reverse_delay = 2
-        self._delay = 0
-        self.flag_pins = None
-        if conf.get('buttons'):
-            self._buttons = []
-            for idx, pin in enumerate(conf['buttons']):
-                reverse = bool(idx)
-                self._buttons.add(Pin(pin, Pin.IN, Pin.PULL_UP, 
-                    handler=self.on_button_reverse if reverse else self.on_button, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING))
-        if conf.get('flag_pins'):
-            self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
-
-    def on_button_reverse(self, pin):
-        self.on_button(pin, True)
-
-    def on_button(self, pin, reverse=False):
-        print('button {0} {1} {2}'.format(
-            pin, pin.value(), 'reverse' if reverse else ''
-        ))
-        if pin.value():
-            self.on(False, 'manual')
-        else:
-            self.reverse = reverse
-            self.on(True, 'manual')
-
-    @property
-    def state(self):
-        return self.pin.value()
-
-    @state.setter
-    def state(self, value):
-        self.on(value=value)
 
     def on(self, value=True, source='manual'):
         if value:            
@@ -83,13 +36,15 @@ class FeederController(RelaySwitchController):
                 LOG.debug('feeder pin off')
                 self.pin.value(0)
                 self.reverse = False
-                self.device.append_log_entries("Feeder stop {0}{1}".format(
+                self.device.append_log_entries("{} stop {}{}".format(
+                    self._timers_param,
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                
             else:
                 LOG.debug('feeder pin on')
                 self.pin.value(1)
-                self.device.append_log_entries("Feeder start {0}{1}".format(
+                self.device.append_log_entries("{} start {}{}".format(
+                    self._timers_param,
                     ' (reverse) ' if self.reverse else '',
                     'manual' if source == 'manual' else 'timer'))                
         if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
@@ -99,13 +54,6 @@ class FeederController(RelaySwitchController):
 
     def off(self, source='manual'):
         self.on(False, source)
-
-    async def check_current(self):
-        if self._power_monitor:
-            while self.state:
-                cur = self._power_monitor.current()
-                self.device.append_log_entries("Feeder current: {0:+.2f}".format(cur))
-                await uasyncio.sleep(1)
 
     async def check_timers(self):
         off = None
@@ -133,7 +81,7 @@ class FeederController(RelaySwitchController):
                         if self.flag_pins:
                             flag_pin = self.flag_pins[1 if self.reverse else 0]
                             if flag_pin.value():
-                                self.device.append_log_entries("Feeder task success")
+                                self.device.append_log_entries("%s task success" % self._timers_param)
                                 return False
                         return True
 
@@ -142,7 +90,7 @@ class FeederController(RelaySwitchController):
                         now = utime.time()
                         current = self._power_monitor.current() if self._power_monitor else None
                         if current:
-                            self.device.append_log_entries("Feeder current: {0:+.2f}".format(current))
+                            self.log_current(current)
                         expired += now - prev_time
                         prev_time = now
                         if current and current > self._reverse_threshold:
@@ -157,56 +105,10 @@ class FeederController(RelaySwitchController):
             manage_memory()
             await uasyncio.sleep(60 - machine.RTC().now()[6])
 
-    async def run_for(self, duration):
-        start = utime.time()
-        now = start
-        prev_time = start
-        expired = 0
-        retries = 0
-        self.on()
-        while expired < duration and retries < 3:
-            await uasyncio.sleep(1)
-            now = utime.time()
-            current = self._power_monitor.current() if self._power_monitor else None
-            if current:
-                self.device.append_log_entries("Feeder current: {0:+.2f}".format(current))
-            expired += now - prev_time
-            prev_time = now
-            if current and current > self._reverse_threshold:
-                await self.engine_reverse(True)
-                await uasyncio.sleep(self._reverse_duration)
-                expired -= self._reverse_duration + 2 * self._reverse_delay
-                retries += 1
-                await self.engine_reverse(False)
-        self.off()
-
-    async def engine_reverse(self, reverse):
-        self.pin.value(False)
-        await uasyncio.sleep(self._reverse_delay)
-        self.reverse = reverse
-        await uasyncio.sleep(self._reverse_delay)
-        self.pin.value(True)
-
     def create_timer(self, conf):
         return FeederTimer(conf, self)
 
     def delete_timer(self, timer_idx, change_settings=True):
         self.off(source=self.timers[timer_idx])
-        RelaySwitchController.delete_timer(self, timer_idx, change_settings)
+        GateController.delete_timer(self, timer_idx, change_settings)
 
-    @property
-    def reverse(self):
-        return self._reverse.value()
-
-    def update_settings(self):
-        RelaySwitchController.update_settings(self)
-        if 'reverse_threshold' in self.device.settings:
-            self._reverse_threshold = self.device.settings['reverse_threshold']
-        if 'reverse_duration' in self.device.settings:
-            self._reverse_duration = self.device.settings['reverse_duration']
-
-    @reverse.setter
-    def reverse(self, value):
-        if value != self.reverse:
-            self.device.append_log_entries("Feeder reverse {0}".format('on' if value else 'off'))
-            self._reverse.value(value)

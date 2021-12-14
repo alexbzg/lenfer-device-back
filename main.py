@@ -71,7 +71,7 @@ async def get_time(req, rsp):
 @APP.route('/')
 async def get_index(req, rsp):
     await APP.sendfile(rsp, 'html/index.html', content_type="text/html; charset=utf-8")
-    gc.collect()
+    manage_memory()
 
 @APP.route('/api/modules')
 async def get_modules(req, rsp):

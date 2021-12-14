@@ -51,6 +51,7 @@ class RelaySwitchController(LenferController):
             self.timers.append(timer)
             
         self.timers.sort(key=lambda timer: timer.time_on)
+        logging.info(self.timers)
 
     def delete_timer(self, timer_idx, change_settings=True):
         if change_settings:
@@ -61,10 +62,10 @@ class RelaySwitchController(LenferController):
         if self.pin.value() != value:
             if self.pin.value():
                 self.pin.value(0)
-                self.device.append_log_entries("Feeder stop timer")                
+                self.device.append_log_entries("%s stop timer" % self._timers_param)                
             else:
                 self.pin.value(1)
-                self.device.append_log_entries("Feeder start timer")
+                self.device.append_log_entries("%s start timer" % self._timers_param)
         manage_memory()
 
     def off(self):
@@ -72,7 +73,8 @@ class RelaySwitchController(LenferController):
 
     async def adjust_switch(self, once=False):
         while True:
-            now = time_tuple_to_seconds(machine.RTC().now(), seconds=True)
+            now_tuple = machine.RTC().now()            
+            now = time_tuple_to_seconds(now_tuple, seconds=True)
             next_time_on = None
             if self._schedule_params:
                 day = self.device.schedule.current_day()
@@ -92,7 +94,7 @@ class RelaySwitchController(LenferController):
                     last_timer = passed_timers[-1]
                     self.on(last_timer.duration == 0)
                     next_timers = [timer for timer in self.timers if timer.time_on > now]
-                    if next_timers and next_timers[0].time_on - last_timer.time_on < 60:
+                    if next_timers and last_timer.time_on < next_timers[0].time_on < last_timer.time_on + 60:
                         next_time_on = next_timers[0].time_on - last_timer.time_on
             if once:
                 break               

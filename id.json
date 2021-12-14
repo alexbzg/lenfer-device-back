@@ -1,8 +1,1 @@
-{
-    "id": 11, 
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjExfQ.J4jKLdtwPukshFzVBozR_S9AvxD9O3syvHTExx8quQc",
-    "hash": "4Pk4BY",
-    "type": "feeder",
-    "updates": true,
-    "disable_software_updates": true
-}
+{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOjM4fQ.0SBE_k37WG8H42IuHbdpvtu2vofwzt0e8ETModKD0uI", "type": "gate", "updates": true, "id": 38, "hash": "lyV4PG", "disable_software_updates": true}

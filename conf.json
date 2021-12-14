@@ -1,47 +1,36 @@
 {
     "modules": {
-        "climate": {
+        "feeder": {
+            "enabled": false,
+            "reverse": 25,
+            "buttons": [18, 19],
+            "pin": 26,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            }
+        },
+        "relay_switch": {
             "enabled": true,
-            "obligatory": true,
-            "sensor_devices": [
-                {
-                    "type": "ds18x20",
-                    "ow": 0,
-                    "sensors_ids": [21]
-                },                
-                {
-                    "type": "ds18x20",
-                    "ow": 1,
-                    "sensors_ids": [22]
-                },                
-                {
-                    "type": "ds18x20",
-                    "ow": 2,
-                    "sensors_ids": [23]
-                }
-            ],
-            "switches": false,
-            "limits": false,
-            "sensors_roles": false,
-            "sensors_titles": {
-                "21": "D0",
-                "22": "D1",
-                "23": "D2"
-            },
-            "sleep": 750
-        }
+            "reverse": false,
+            "buttons": false,
+            "timers_param": "light",
+            "pin": 27
+        },        
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        }        
     },
     "sleep": 750,
-    "i2c": [],
-    "ow": [21, 22, 23],
-    "leds": {},
-    "factory_reset": null,
-    "wlan_switch": null,
-    "gsm_modem": {
-        "rst": 19,
-        "pwr_key": 32,
-        "tx": 26,
-        "rx": 25,
-        "on": 33
-    }
+    "i2c": [{
+        "scl": 32,
+        "sda": 33
+    }],
+    "ow": [],
+    "leds": {
+        "status": 23
+    },
+    "factory_reset": 22,
+    "wlan_switch": 19
 }
