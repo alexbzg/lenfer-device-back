@@ -1,9 +1,10 @@
 {
     "modules": {
-        "feeder": {
-            "enabled": false,
+        "gate": {
+            "enabled": true,
             "reverse": 25,
             "buttons": [18, 19],
+            "flag_pins": [16, 17],
             "pin": 26,
             "power_monitor": {
                 "i2c": 0,

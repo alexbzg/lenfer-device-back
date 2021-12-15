@@ -118,6 +118,16 @@ class LenferDevice:
             machine.resetWDT()
             manage_memory()
 
+        if 'gate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['gate']):
+            try:
+                from gate_controller import GateController
+                self.modules['gate'] = GateController(self, self._conf['modules']['gate'])
+                LOG.info('Gate init')
+            except Exception as exc:
+                LOG.exc(exc, 'Gate initialization error')
+            machine.resetWDT()
+            manage_memory()
+
         if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
             try:
                 from relay_switch import RelaySwitchController
@@ -365,12 +375,12 @@ class LenferDevice:
                     loop.create_task(self.post_sensor_data())
             elif module_type =='relay_switch':
                 loop.create_task(self.modules['relay_switch'].adjust_switch())                
+            elif module_type =='gate':
+                loop.create_task(self.modules['gate'].adjust_switch())                
             elif module_type == 'rtc':
                 loop.create_task(self.modules['rtc'].adjust_time())
             elif module_type == 'feeder':
                 loop.create_task(self.modules['feeder'].check_timers())
-            elif module_type == 'relay_switch':
-                loop.create_task(self.modules['relay_switch'].adjust_switch())
         if self.online():
             loop.create_task(self.post_log())
             if self.id.get('updates'):

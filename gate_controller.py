@@ -1,6 +1,7 @@
 import machine
 from machine import Pin
 import logging
+import utime
 
 import lib.uasyncio as uasyncio
 
@@ -15,7 +16,7 @@ LOG = logging.getLogger("Relay")
 class GateController(RelaySwitchController):
 
     def __init__(self, device, conf):
-        RelaySwitchController.__init__(self, device)
+        RelaySwitchController.__init__(self, device, conf)
         self._power_monitor = None
         if conf.get('power_monitor'): 
             manage_memory()
@@ -25,7 +26,7 @@ class GateController(RelaySwitchController):
             except Exception as exc:
                 LOG.exc(exc, 'Power monitor init error')
 
-        self._reverse = Pin(conf['reverse'], Pin.OUT)
+        self._reverse = Pin(conf['reverse'], Pin.INOUT)
         self.reverse = False
         self._reverse_threshold = device.settings.get('reverse_threshold')
         self._reverse_duration = device.settings.get('reverse_duration')
@@ -45,6 +46,57 @@ class GateController(RelaySwitchController):
     @property
     def state(self):
         return self.pin.value()
+
+    @state.setter
+    def state(self, value):
+        self.on(value=value)         
+
+    @property
+    def gate_state(self):
+        #0 - closed, 1 - open, None - unknown
+        if self.flag_pins:
+            for idx, flag_pin in enumerate(self.flag_pins):
+                if flag_pin.value() == 0:
+                    return 0 if idx == 1 else 1
+        return None                    
+
+    async def set_gate_state(self, value):
+        if self.gate_state != value:
+            self.reverse = 1 if value else 0
+            expired = 0
+            retries = 0
+            prev_time = utime.time()
+            self.on()
+
+            def continue_flag():
+                nonlocal retries, expired
+                if retries >= 3:
+                    return False
+                if self._expired_limit and expired > self._expired_limit:
+                    return False    
+                if self.flag_pins:
+                    flag_pin = self.flag_pins[0 if self.reverse else 1]
+                    if flag_pin.value() == 0:
+                        self.device.append_log_entries("%s task success" % self._timers_param)
+                        return False
+                return True
+
+            while continue_flag():
+                await uasyncio.sleep(1)
+                now = utime.time()
+                expired += now - prev_time
+                prev_time = now
+                if self._power_monitor and self._reverse_threshold:
+                    current = self._power_monitor.current()
+                    if current:
+                        self.log_current(current)
+                        if current > self._reverse_threshold:
+                            await self.engine_reverse()
+                            await uasyncio.sleep(self._reverse_duration)
+                            expired -= self._reverse_duration + 2 * self._reverse_delay
+                            retries += 1
+                            await self.engine_reverse()
+            self.off()
 
     @state.setter
     def state(self, value):
@@ -71,11 +123,11 @@ class GateController(RelaySwitchController):
                 await uasyncio.sleep(1)
 
     def log_current(self, cur):
-        self.device.append_log_entries("{} current: {0:+.2f}".format(self._timers_param, cur))
+        self.device.append_log_entries("{0} current: {1:+.2f}".format(self._timers_param, cur))
 
     async def adjust_switch(self, once=False):
         while True:
-            now_tuple = machine.RTC().now()            
+            now_tuple = machine.RTC().now()     
             now = time_tuple_to_seconds(now_tuple, seconds=True)
             next_time_on = None
             if self._schedule_params:
@@ -83,9 +135,9 @@ class GateController(RelaySwitchController):
                 if day:
                     limits = [day[idx] if idx and day[idx] else None for idx in self._schedule_params_idx]
                     if limits[0] and ((limits[0] <= now and not limits[1]) or (limits[0] <= now < limits[1]) or (limits[0] < limits[1] <= now)):
-                        self.on()
+                        self.set_gate_state(1)
                     if limits[1] and ((limits[1] <= now and not limits[0]) or (limits[1] <= now < limits[0]) or (limits[1] < limits[0] <= now)):
-                        self.off()
+                        self.set_gate_state(0)
             else:
                 if now == 0:
                     self.init_timers()
@@ -94,7 +146,7 @@ class GateController(RelaySwitchController):
                     passed_timers = [self.timers[-1]]
                 if passed_timers:
                     last_timer = passed_timers[-1]
-                    self.on(last_timer.duration == 0)
+                    await self.set_gate_state(1 if last_timer.duration == 0 else 0)
                     next_timers = [timer for timer in self.timers if timer.time_on > now]
                     if next_timers and last_timer.time_on < next_timers[0].time_on < last_timer.time_on + 60:
                         next_time_on = next_timers[0].time_on - last_timer.time_on
@@ -106,12 +158,13 @@ class GateController(RelaySwitchController):
             else:    
                 await uasyncio.sleep(60 - machine.RTC().now()[5])
 
-    async def engine_reverse(self, reverse):
-        self.pin.value(False)
+    async def engine_reverse(self):
+        self.device.append_log_entries("%s engine reverse" % self._timers_param)
+        self.pin.value(0)
         await uasyncio.sleep(self._reverse_delay)
-        self.reverse = reverse
+        self.reverse = 0 if self.reverse else 1
         await uasyncio.sleep(self._reverse_delay)
-        self.pin.value(True)
+        self.pin.value(1)
 
     @property
     def reverse(self):
@@ -128,6 +181,5 @@ class GateController(RelaySwitchController):
 
     @reverse.setter
     def reverse(self, value):
-        if value != self.reverse:
-            self.device.append_log_entries("{} reverse {0}".format(self._timers_param, 'on' if value else 'off'))
+        if value != self.reverse:            
             self._reverse.value(value)
