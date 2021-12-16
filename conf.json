@@ -32,6 +32,6 @@
     "leds": {
         "status": 23
     },
-    "factory_reset": 22,
-    "wlan_switch": 19
+    "factory_reset": 13,
+    "wlan_switch": 22
 }

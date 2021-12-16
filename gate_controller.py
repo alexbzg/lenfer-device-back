@@ -49,7 +49,12 @@ class GateController(RelaySwitchController):
 
     @state.setter
     def state(self, value):
-        self.on(value=value)         
+        self.on(value=value)
+
+    def on(self, value=True, manual=False):
+        RelaySwitchController.on(self, value, manual)
+        if not value:
+            self.reverse = False
 
     @property
     def gate_state(self):
@@ -77,7 +82,7 @@ class GateController(RelaySwitchController):
                 if self.flag_pins:
                     flag_pin = self.flag_pins[0 if self.reverse else 1]
                     if flag_pin.value() == 0:
-                        self.device.append_log_entries("%s task success" % self._timers_param)
+                        self.device.append_log_entries("%s success %s" % (self._timers_param, 'open' if self.reverse else 'close'))
                         return False
                 return True
 
@@ -98,22 +103,15 @@ class GateController(RelaySwitchController):
                             await self.engine_reverse()
             self.off()
 
-    @state.setter
-    def state(self, value):
-        self.on(value=value)         
-
     def on_button_reverse(self, pin):
         self.on_button(pin, True)
 
     def on_button(self, pin, reverse=False):
-        print('button {0} {1} {2}'.format(
-            pin, pin.value(), 'reverse' if reverse else ''
-        ))
         if pin.value():
-            self.on(False, 'manual')
+            self.on(False, manual=True)
         else:
             self.reverse = reverse
-            self.on(True, 'manual')
+            self.on(True, manual=True)
 
     async def check_current(self):
         if self._power_monitor:
