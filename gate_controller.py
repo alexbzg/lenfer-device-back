@@ -51,10 +51,13 @@ class GateController(RelaySwitchController):
     def state(self, value):
         self.on(value=value)
 
-    def on(self, value=True, manual=False):
-        RelaySwitchController.on(self, value, manual)
-        if not value:
-            self.reverse = False
+    def log_relay_switch(self, operation, source):
+        self.device.append_log_entries("%s %s %s %s" % (
+            self._timers_param,
+            operation,
+            'open' if self.reverse else 'close',
+            source
+        ))
 
     @property
     def gate_state(self):

@@ -60,13 +60,16 @@ class RelaySwitchController(LenferController):
 
     def on(self, value=True, manual=False):
         if self.pin.value() != value:
-            if self.pin.value():
-                self.pin.value(0)
-                self.device.append_log_entries("%s stop %s" % (self._timers_param, 'manual' if manual else 'timer'))                
-            else:
-                self.pin.value(1)
-                self.device.append_log_entries("%s start %s" % (self._timers_param, 'manual' if manual else 'timer'))
+            self.pin.value(value)
+            self.log_relay_switch('start' if value else 'stop', 'manual' if manual else 'timer')
         manage_memory()
+
+    def log_relay_switch(self, operation, source):
+        self.device.append_log_entries("%s %s %s" % (
+            self._timers_param,
+            operation,
+            source
+        ))
 
     def off(self):
         self.on(False)    
