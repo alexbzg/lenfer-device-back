@@ -1,0 +1,37 @@
+{
+    "modules": {
+        "gate": {
+            "enabled": true,
+            "reverse": 25,
+            "buttons": [18, 19],
+            "flag_pins": [16, 17],
+            "pin": 26,
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            }
+        },
+        "relay_switch": {
+            "enabled": true,
+            "reverse": false,
+            "buttons": false,
+            "timers_param": "light",
+            "pin": 27
+        },        
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        }        
+    },
+    "sleep": 750,
+    "i2c": [{
+        "scl": 32,
+        "sda": 33
+    }],
+    "ow": [],
+    "leds": {
+        "status": 23
+    },
+    "factory_reset": 13,
+    "wlan_switch": 22
+}
