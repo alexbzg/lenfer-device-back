@@ -1,4 +1,5 @@
-from machine import Pin, Onewire
+from machine import Pin, Onewire, UART
+import ubinascii
 import logging
 
 LOG = logging.getLogger("Sensors")
@@ -14,6 +15,26 @@ class SensorDevice:
             for sensor_id in self._sensors_ids:
                 if not sensor_id in controller.data:
                     controller.data[sensor_id] = None
+
+class SensorDevicePZEM004T(SensorDevice):
+    "PZEM-004T sensor handler"
+
+    def __init__(self, conf, controller):
+        SensorDevice.__init__(self, conf, controller)
+        self._uart = UART(conf['uart']['id'], tx=conf['uart']['tx'], rx=conf['uart']['rx'], baudrate=9600, timeout=3)
+        self._uart.init()
+
+    def read(self):
+        "reads sensors data and stores in into controller data field"
+        self._uart.write(b"\xf8\x04\x00\x00\x00\x0a\x64\x64")   
+        msg_raw = self._uart.read(25)
+        if msg_raw:
+            try:
+                msg = ubinascii.hexlify(msg_raw).decode()
+                self._controller.data[self._sensors_ids[0]] = int(msg[6:10], 16) / 10 #volatge
+                self._controller.data[self._sensors_ids[1]] = int(msg[10:14], 16) / 1000 #current
+            except Exception as exc:
+                LOG.exc(exc, 'PZEM UART reading error')
 
 class SensorDeviceBME280(SensorDevice):
     "BME280 sensor handler"

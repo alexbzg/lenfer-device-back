@@ -1,16 +1,19 @@
 {
     "modules": {
         "power_monitor": {
-            "uart": {
-                "id": 1,
-                "tx": 15,
-                "rx": 2
-            },
             "enabled": true,
-            "sensors": {
-                "voltage": 200,
-                "current": 300
-            }
+            "obligatory": true,
+            "sensor_devices": [
+                {
+                    "type": "pzem004t",
+                    "uart": {
+                        "id": 1,
+                        "tx": 15,
+                        "rx": 2
+                    },
+                    "sensors_ids": [24, 25]
+                }
+            ]
         }
     },
     "sleep": 750,

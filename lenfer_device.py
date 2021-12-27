@@ -108,6 +108,20 @@ class LenferDevice:
                     machine.reset()
             machine.resetWDT()
             manage_memory()
+        if 'power_monitor' in self._conf['modules'] and self.module_enabled(self._conf['modules']['power_monitor']):
+            try:
+                from power_monitor_controller import PowerMonitor
+                self.modules['power_monitor'] = PowerMonitor(self, self._conf['modules']['power_monitor'])
+                LOG.info('PowerMonitor init')
+
+            except Exception as exc:
+                LOG.exc(exc, 'PowerMonitor initialization error')
+                if self._conf['modules']['power_monitor'].get('obligatory'):
+                    LOG.error('Obligatory module initialization fail -- machine reset')
+                    machine.reset()
+            machine.resetWDT()
+            manage_memory()
+
         if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
             try:
                 from feeder import FeederController
@@ -369,8 +383,8 @@ class LenferDevice:
         if self._network._wlan and (self._network._wlan.mode == AP_IF and self._network._wlan.conf['ssid']):
             loop.create_task(self.delayed_ssid_switch())
         for module_type in self.modules:
-            if module_type == 'climate':
-                loop.create_task(self.modules['climate'].read())
+            if module_type == 'climate' or module_type == 'power_monitor':
+                loop.create_task(self.modules[module_type].read())
                 if self.online():
                     loop.create_task(self.post_sensor_data())
             elif module_type =='relay_switch':
