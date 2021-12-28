@@ -1,7 +1,8 @@
 import gc
 from network import AP_IF
 import machine
-from machine import WDT, Pin, I2C
+from machine import WDT, Pin, I2C, RTC
+import utime
 
 import lib.uasyncio as uasyncio
 import logging
@@ -286,8 +287,12 @@ class LenferDevice:
             try:
                 data = {'data': []}
                 tstamp = self.post_tstamp()
-                for ctrl in self.modules.values():
-                    if ctrl and hasattr(ctrl, 'data'):
+                for ctrl in self.modules.values():                   
+                    if ctrl and hasattr(ctrl, 'data_log'):
+                        data['data'] += [{'sensor_id': entry[0], 'tstamp': entry[1], 'value': entry[2]}\
+                            for entry in ctrl.data_log]
+                        ctrl.data_log = []                    
+                    elif ctrl and hasattr(ctrl, 'data'):
                         data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                             for _id, value in ctrl.data.items()]
                 if data['data']:
@@ -347,6 +352,25 @@ class LenferDevice:
 
     def start(self):
         WDT(True)        
+        if self.online and self.settings.get('timezone'):
+            timezone = '<UTC'
+            tz_offset = -self.settings['timezone']
+            if tz_offset > 0:
+                timezone += '+'
+            if tz_offset:
+                timezone += str(tz_offset)
+            timezone += '>'
+            rtc = RTC()
+            rtc.ntp_sync(server='pool.ntp.org', tz=timezone)
+            if not rtc.synced():
+                print('  waiting for time sync...', end='')
+                utime.sleep(0.5)
+                while not rtc.synced():
+                    print('.', end='')
+                    utime.sleep(0.5)
+                print('')
+            print('Time:', self.post_tstamp())
+
         if self.deepsleep():
             loop = uasyncio.get_event_loop()
             for module_type in self.modules:

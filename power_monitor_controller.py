@@ -14,7 +14,7 @@ class PowerMonitor(LenferController):
     def __init__(self, device, conf):
         LenferController.__init__(self, device)
         self.data = {}
-        self._sleep = device.settings['sleep']
+        self.data_log = []
         self.sensor_devices = []
         for sensor_device_conf in conf['sensor_devices']:
             if sensor_device_conf['type'] == 'pzem004t':                
@@ -23,11 +23,15 @@ class PowerMonitor(LenferController):
 
     async def read(self, once=False):
         while True:
+            tstamp = self.device.post_tstamp()
             for sensor_device in self.sensor_devices:
-                sensor_device.read()
+                if sensor_device.read():
+                    for sensor_id in sensor_device._sensors_ids:
+                        self.data_log.append([sensor_id, tstamp, self.data[sensor_id]])
             if once:
                 return
-            await uasyncio.sleep(self._sleep)
+            await uasyncio.sleep(self.device.settings['sleep'])
+
 
 
 

@@ -33,8 +33,10 @@ class SensorDevicePZEM004T(SensorDevice):
                 msg = ubinascii.hexlify(msg_raw).decode()
                 self._controller.data[self._sensors_ids[0]] = int(msg[6:10], 16) / 10 #volatge
                 self._controller.data[self._sensors_ids[1]] = int(msg[10:14], 16) / 1000 #current
+                return True
             except Exception as exc:
                 LOG.exc(exc, 'PZEM UART reading error')
+        return False
 
 class SensorDeviceBME280(SensorDevice):
     "BME280 sensor handler"
