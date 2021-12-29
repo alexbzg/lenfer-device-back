@@ -3,16 +3,33 @@
         "power_monitor": {
             "enabled": true,
             "obligatory": true,
+            "uart_id": 1,
             "sensor_devices": [
                 {
                     "type": "pzem004t",
                     "uart": {
-                        "id": 1,
-                        "tx": 15,
-                        "rx": 2
+                        "tx": 23,
+                        "rx": 22
                     },
                     "sensors_ids": [24, 25]
+                },
+                {
+                    "type": "pzem004t",
+                    "uart": {
+                        "tx": 19,
+                        "rx": 18
+                    },
+                    "sensors_ids": [26, 27]
+                },
+                {
+                    "type": "pzem004t",
+                    "uart": {
+                        "tx": 17,
+                        "rx": 16
+                    },
+                    "sensors_ids": [28, 29]
                 }
+
             ]
         }
     },
@@ -20,7 +37,8 @@
     "i2c": [],
     "ow": [],
     "leds": {
+        "status": 4
     },
     "factory_reset": null,
-    "wlan_switch": null
+    "wlan_switch": 21
 }

@@ -251,6 +251,7 @@ class LenferDevice:
     async def check_updates(self, once=False):
         while True:
             deepsleep = bool(self.deepsleep())
+            timezone = self.settings.get('timezone')
             try:
                 data = {
                     'schedule': {
@@ -270,7 +271,9 @@ class LenferDevice:
                             if ctrl:
                                 ctrl.update_settings()
                     if deepsleep != bool(self.deepsleep()):
-                        machine.reset()                    
+                        machine.reset()           
+                    if timezone != self.settings.get('timezone'):
+                        self.ntp_sync()
                     if 'mode' in self.settings and self.mode != self.settings['mode']:
                         machine.reset()
             except Exception as exc:
@@ -350,9 +353,8 @@ class LenferDevice:
     def deepsleep(self):
         return self.settings.get('deepsleep')
 
-    def start(self):
-        WDT(True)        
-        if self.online and self.settings.get('timezone'):
+    def ntp_sync(self):
+        if self.online() and self.settings.get('timezone'):
             timezone = '<UTC'
             tz_offset = -self.settings['timezone']
             if tz_offset > 0:
@@ -361,7 +363,7 @@ class LenferDevice:
                 timezone += str(tz_offset)
             timezone += '>'
             rtc = RTC()
-            rtc.ntp_sync(server='pool.ntp.org', tz=timezone)
+            rtc.ntp_sync(server='pool.ntp.org', tz=timezone, update_period=3600)
             if not rtc.synced():
                 print('  waiting for time sync...', end='')
                 utime.sleep(0.5)
@@ -370,7 +372,12 @@ class LenferDevice:
                     utime.sleep(0.5)
                 print('')
             print('Time:', self.post_tstamp())
+            if self.modules.get('rtc'):
+                self.modules['rtc'].save_time()
 
+    def start(self):
+        WDT(True)        
+        self.ntp_sync()
         if self.deepsleep():
             loop = uasyncio.get_event_loop()
             for module_type in self.modules:
