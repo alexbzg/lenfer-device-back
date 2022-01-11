@@ -34,7 +34,6 @@ class FeederController(GateController):
         if self.state != bool(self._active):
             if self.state:
                 LOG.debug('feeder pin off')
-                self.pin.value(0)
                 self.reverse = False
                 self.device.append_log_entries("{} stop {}{}".format(
                     self._timers_param,
@@ -42,11 +41,11 @@ class FeederController(GateController):
                     'manual' if source == 'manual' else 'timer'))                
             else:
                 LOG.debug('feeder pin on')
-                self.pin.value(1)
                 self.device.append_log_entries("{} start {}{}".format(
                     self._timers_param,
                     ' (reverse) ' if self.reverse else '',
-                    'manual' if source == 'manual' else 'timer'))                
+                    'manual' if source == 'manual' else 'timer'))
+            self.state = not self.state
         if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
             uasyncio.get_event_loop().create_task(self.check_current())
         LOG.debug('Feeder state: %s' % self.state)

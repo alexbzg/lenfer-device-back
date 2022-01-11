@@ -45,6 +45,14 @@ class RelaySwitchController(LenferController):
     def create_timer(self, conf):
         return Timer(conf, self)
 
+    @property
+    def state(self):
+        return self._on if self._pulse_interval else self.pin.value()
+
+    @state.setter
+    def state(self, value):
+        self.on(value=value)
+
     def init_timers(self):
         self.timers = []
         sun_data = None
@@ -72,7 +80,7 @@ class RelaySwitchController(LenferController):
         del self.timers[timer_idx]
 
     def on(self, value=True, manual=False):
-        if self.pin.value() != value:
+        if self.state != value:
             if self._pulse_length:
                 self._on = value
             else:

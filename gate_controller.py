@@ -43,13 +43,6 @@ class GateController(RelaySwitchController):
         if conf.get('flag_pins'):
             self.flag_pins = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in conf['flag_pins']]
 
-    @property
-    def state(self):
-        return self.pin.value()
-
-    @state.setter
-    def state(self, value):
-        self.on(value=value)
 
     def log_relay_switch(self, operation, source):
         self.device.append_log_entries("%s %s %s %s" % (
