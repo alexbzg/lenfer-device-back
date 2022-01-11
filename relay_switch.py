@@ -22,12 +22,25 @@ class RelaySwitchController(LenferController):
         self.timers = []
         self._schedule_params = None
         self._timers_param = None
+        self._pulse_interval = conf.get('pulse_interval')
+        self._pulse_length = conf.get('pulse_length')
         if conf.get('schedule_params'):
             self._schedule_params = conf['schedule_params']
             self._schedule_params_idx = [self.device.schedule.param_idx(param) for param in self._schedule_params]
         else:
             self._timers_param = conf['timers_param'] if 'timers_param' in conf else 'timers'
             self.init_timers()
+        if self._pulse_length:
+            self._on = False
+            uasyncio.get_event_loop().create_task(self.pulse_task())
+        
+    async def pulse_task(self):
+        while True:
+            if self._on:
+                self.pin.value(1)
+                await uasyncio.sleep_ms(self._pulse_length)
+                self.pin.value(0)
+            await uasyncio.sleep(self._pulse_interval)
     
     def create_timer(self, conf):
         return Timer(conf, self)
@@ -60,7 +73,10 @@ class RelaySwitchController(LenferController):
 
     def on(self, value=True, manual=False):
         if self.pin.value() != value:
-            self.pin.value(value)
+            if self._pulse_length:
+                self._on = value
+            else:
+                self.pin.value(value)
             self.log_relay_switch('start' if value else 'stop', 'manual' if manual else 'timer')
         manage_memory()
 

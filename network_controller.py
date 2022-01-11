@@ -87,8 +87,8 @@ class NetworkController():
                 self._gsm_pwr_key.value(0)
             if self._gsm_rst:
                 self._gsm_rst.value(0)
-            if self._gsm_pwr:
-                self._gsm_pwr.value(0)
+            #if self._gsm_pwr:
+            #    self._gsm_pwr.value(0)
             if self._gsm_modem_on:
                 for uart_pin_type in ('tx', 'rx'):
                     machine.Pin(self._conf['gsm_modem'][uart_pin_type], machine.Pin.OUT, value=0)
@@ -146,7 +146,7 @@ class NetworkController():
             gsm_apns = load_json('gsm_apns.json')
             apn_settings = {}
 
-            self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.OUT, value=1)\
+            self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.INOUT, value=0)\
                 if self._conf['gsm_modem'].get('pwr') else None
 
             self._gsm_rst = machine.Pin(self._conf['gsm_modem']['rst'], machine.Pin.OUT, value=1)\
