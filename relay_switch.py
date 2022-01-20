@@ -28,11 +28,12 @@ class RelaySwitchController(LenferController):
             self._schedule_params = conf['schedule_params']
             self._schedule_params_idx = [self.device.schedule.param_idx(param) for param in self._schedule_params]
         else:
-            self._timers_param = conf['timers_param'] if 'timers_param' in conf else 'timers'
+            self._timers_param = conf.get('timers_param') or 'timers'
             self.init_timers()
         if self._pulse_length:
             self._on = False
             uasyncio.get_event_loop().create_task(self.pulse_task())
+        self._log_prop_name = conf.get('log_prop_name') or self._timers_param
         
     async def pulse_task(self):
         while True:
@@ -90,7 +91,7 @@ class RelaySwitchController(LenferController):
 
     def log_relay_switch(self, operation, source):
         self.device.append_log_entries("%s %s %s" % (
-            self._timers_param,
+            self._log_prop_name,
             operation,
             source
         ))

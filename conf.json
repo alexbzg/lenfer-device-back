@@ -1,44 +1,31 @@
 {
     "modules": {
-        "power_monitor": {
+        "feeder": {
             "enabled": true,
-            "obligatory": true,
-            "uart_id": 1,
-            "sensor_devices": [
-                {
-                    "type": "pzem004t",
-                    "uart": {
-                        "tx": 23,
-                        "rx": 22
-                    },
-                    "sensors_ids": [24, 25]
-                },
-                {
-                    "type": "pzem004t",
-                    "uart": {
-                        "tx": 19,
-                        "rx": 18
-                    },
-                    "sensors_ids": [26, 27]
-                },
-                {
-                    "type": "pzem004t",
-                    "uart": {
-                        "tx": 17,
-                        "rx": 16
-                    },
-                    "sensors_ids": [28, 29]
-                }
-
-            ]
-        }
+            "reverse": 21,
+            "buttons": [27, 26],
+            "pin": 22,
+            "adc": 35,
+            "log_prop_name": "Feeder",
+            "power_monitor": {
+                "i2c": 0,
+                "shunt_ohms": 0.1
+            }
+        },
+        "rtc": {
+            "enabled": true,
+            "i2c": 0
+        }        
     },
     "sleep": 750,
-    "i2c": [],
+    "i2c": [{
+        "scl": 32,
+        "sda": 33
+    }],
     "ow": [],
     "leds": {
-        "status": 4
+        "status": 23
     },
-    "factory_reset": null,
-    "wlan_switch": 21
+    "factory_reset": 17,
+    "wlan_switch": 19
 }

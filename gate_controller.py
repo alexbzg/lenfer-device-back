@@ -46,7 +46,7 @@ class GateController(RelaySwitchController):
 
     def log_relay_switch(self, operation, source):
         self.device.append_log_entries("%s %s %s %s" % (
-            self._timers_param,
+            self._log_prop_name,
             operation,
             'open' if self.reverse else 'close',
             source
@@ -117,7 +117,7 @@ class GateController(RelaySwitchController):
                 await uasyncio.sleep(1)
 
     def log_current(self, cur):
-        self.device.append_log_entries("{0} current: {1:+.2f}".format(self._timers_param, cur))
+        self.device.append_log_entries("{0} current: {1:+.2f}".format(self._log_prop_name, cur))
 
     async def adjust_switch(self, once=False):
         while True:

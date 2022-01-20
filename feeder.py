@@ -6,6 +6,7 @@ import utime
 import logging
 
 from gate_controller import GateController
+from relay_switch import RelaySwitchController
 from timers import Timer, time_tuple_to_seconds
 
 from utils import manage_memory
@@ -29,27 +30,17 @@ class FeederController(GateController):
         else:
             if source in self._active:
                 del self._active[source]
-        LOG.debug('Feeder active: %s' % self._active)
-        LOG.debug('Feeder state: %s' % self.state)
         if self.state != bool(self._active):
             if self.state:
-                LOG.debug('feeder pin off')
                 self.reverse = False
-                self.device.append_log_entries("{} stop {}{}".format(
-                    self._timers_param,
-                    ' (reverse) ' if self.reverse else '',
-                    'manual' if source == 'manual' else 'timer'))                
-            else:
-                LOG.debug('feeder pin on')
-                self.device.append_log_entries("{} start {}{}".format(
-                    self._timers_param,
-                    ' (reverse) ' if self.reverse else '',
-                    'manual' if source == 'manual' else 'timer'))
-            self.state = not self.state
+            RelaySwitchController.on(self, self._active, source == 'manual')
         if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
             uasyncio.get_event_loop().create_task(self.check_current())
         LOG.debug('Feeder state: %s' % self.state)
         manage_memory()
+
+    def log_relay_switch(self, operation, source):
+        RelaySwitchController.log_relay_switch(self, operation, source)
 
     def off(self, source='manual'):
         self.on(False, source)

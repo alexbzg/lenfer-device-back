@@ -321,8 +321,11 @@ class LenferDevice:
             await uasyncio.sleep(59)
             try:
                 if self.log_queue and not self.status['srv_req_pending']:
-                    await self.srv_post('devices_log/post', {'entries': self.log_queue})
-                    self.log_queue = []
+                    while self.log_queue:
+                        entries_count = 10 if len(self.log_queue) > 10 else len(self.log_queue)
+                        entries = self.log_queue[:entries_count]
+                        await self.srv_post('devices_log/post', {'entries': entries})
+                        self.log_queue = self.log_queue[entries_count:] if entries_count < len(self.log_queue) else []
             except Exception as exc:
                 LOG.exc(exc, 'Server log post error')
             manage_memory()

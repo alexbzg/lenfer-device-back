@@ -1,1 +1,8 @@
-{"id": 41, "hash": "ZBN1PW", "type": "power_monitor", "updates": true, "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjQxfQ.l610QYLJ6r8-ym_52gqIM8ILnk-ZaXGgn_jBpSFotA8", "disable_software_updates": true}
+{
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjE5fQ.pJLwJJtz2ig-A9XCSb7yD-wi9Lj28dw5vlHuS3z5UeQ",
+    "type": "feeder",
+    "hash": "dPwv0k",
+    "updates": true,
+    "id": 19,
+    "disable_software_updates": true
+}
