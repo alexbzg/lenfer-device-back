@@ -51,6 +51,7 @@ class LenferDevice:
             "srv_req_pending": False
             }
         self.log_queue = []
+        self.busy = False
         self._conf = load_json('conf.json')
         self.settings = load_json('settings.json')
         self._http = HttpClient()
@@ -294,7 +295,6 @@ class LenferDevice:
                     if ctrl and hasattr(ctrl, 'data_log'):
                         data['data'] += [{'sensor_id': entry[0], 'tstamp': entry[1], 'value': entry[2]}\
                             for entry in ctrl.data_log]
-                        ctrl.data_log = []                    
                     elif ctrl and hasattr(ctrl, 'data'):
                         data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
                             for _id, value in ctrl.data.items()]
@@ -302,6 +302,10 @@ class LenferDevice:
                     rsp = await self.srv_post('sensors_data', data, retry=once)
                     if once and not rsp:
                         machine.reset()
+                    if rsp:
+                        for ctrl in self.modules.values():                   
+                            if ctrl and hasattr(ctrl, 'data_log'):
+                                ctrl.data_log = []
                 data = {'data': []}
                 tstamp = self.post_tstamp()
                 for ctrl in self.modules.values():
@@ -324,8 +328,11 @@ class LenferDevice:
                     while self.log_queue:
                         entries_count = 10 if len(self.log_queue) > 10 else len(self.log_queue)
                         entries = self.log_queue[:entries_count]
-                        await self.srv_post('devices_log/post', {'entries': entries})
-                        self.log_queue = self.log_queue[entries_count:] if entries_count < len(self.log_queue) else []
+                        rsp = await self.srv_post('devices_log/post', {'entries': entries})
+                        if rsp:
+                            self.log_queue = self.log_queue[entries_count:] if entries_count < len(self.log_queue) else []
+                        else: 
+                            break
             except Exception as exc:
                 LOG.exc(exc, 'Server log post error')
             manage_memory()
@@ -336,7 +343,9 @@ class LenferDevice:
             time_tuple = machine.RTC().now()
         return "{0:0>1d}/{1:0>1d}/{2:0>1d} {3:0>1d}:{4:0>1d}:{5:0>1d}".format(*time_tuple) if time_tuple else None
 
-    async def srv_post(self, url, data, retry=False):        
+    async def srv_post(self, url, data, retry=False):
+        if self.busy:
+            return False        
         data['device_id'] = self.id['id']
         data['token'] = self.id['token']
         manage_memory()

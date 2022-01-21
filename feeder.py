@@ -59,6 +59,7 @@ class FeederController(GateController):
                     expired = time - timer.time_on
                     retries = 0
                     self.on(source=timer)
+                    self.device.busy = True
 
                     def continue_flag():
                         nonlocal retries, expired
@@ -90,6 +91,7 @@ class FeederController(GateController):
                             retries += 1
                             await self.engine_reverse(False)
                     self.off(source=timer)
+                    self.device.busy = False
                 if timer.time_on > time:
                     break
             manage_memory()

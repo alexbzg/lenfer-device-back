@@ -68,7 +68,7 @@ class GateController(RelaySwitchController):
             retries = 0
             prev_time = utime.time()
             self.on()
-
+            self.device.busy = True
             def continue_flag():
                 nonlocal retries, expired
                 if retries >= 3:
@@ -98,6 +98,7 @@ class GateController(RelaySwitchController):
                             retries += 1
                             await self.engine_reverse()
             self.off()
+            self.device.busy = False
 
     def on_button_reverse(self, pin):
         self.on_button(pin, True)
