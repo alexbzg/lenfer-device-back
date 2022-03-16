@@ -24,7 +24,9 @@ class FeederController(GateController):
         GateController.__init__(self, device, conf)
         self._active = {}
 
-    def on(self, value=True, source='manual'):
+    def on(self, value=True, source='manual', manual=False):
+        if manual:
+            source = 'manual'
         if value:            
             self._active[source] = True
         else:
@@ -33,8 +35,9 @@ class FeederController(GateController):
         if self.state != bool(self._active):
             if self.state:
                 self.reverse = False
-            RelaySwitchController.on(self, self._active, source == 'manual')
-        if 'manual' in self._active and len(self._active.keys()) == 1 and self._power_monitor:
+            self.device.busy = self._active
+            RelaySwitchController.on(self, self._active, source == 'manual')            
+        if 'manual' in self._active and len(self._active) == 1 and self._power_monitor:
             uasyncio.get_event_loop().create_task(self.check_current())
         LOG.debug('Feeder state: %s' % self.state)
         manage_memory()
@@ -59,7 +62,6 @@ class FeederController(GateController):
                     expired = time - timer.time_on
                     retries = 0
                     self.on(source=timer)
-                    self.device.busy = True
 
                     def continue_flag():
                         nonlocal retries, expired
@@ -91,7 +93,6 @@ class FeederController(GateController):
                             retries += 1
                             await self.engine_reverse(False)
                     self.off(source=timer)
-                    self.device.busy = False
                 if timer.time_on > time:
                     break
             manage_memory()

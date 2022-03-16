@@ -105,10 +105,10 @@ class GateController(RelaySwitchController):
 
     def on_button(self, pin, reverse=False):
         if pin.value():
-            self.on(False, manual=True)
+            self.on(value=False, manual=True)
         else:
             self.reverse = reverse
-            self.on(True, manual=True)
+            self.on(value=True, manual=True)
 
     async def check_current(self):
         if self._power_monitor:
