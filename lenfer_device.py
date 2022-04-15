@@ -14,7 +14,7 @@ from http_client import HttpClient
 
 LOG = logging.getLogger("Device")
 
-SERVER_URI = "http://my.lenfer.ru/api/"
+SERVER_URI = "http://newmy.lenfer.ru/api/"
 SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
@@ -367,13 +367,12 @@ class LenferDevice:
 
     def ntp_sync(self):
         if self.online() and self.settings.get('timezone'):
-            timezone = '<UTC'
-            tz_offset = -self.settings['timezone']
-            if tz_offset > 0:
+            timezone = '<'
+            if self.settings['timezone'] > 0:
                 timezone += '+'
-            if tz_offset:
-                timezone += str(tz_offset)
-            timezone += '>'
+            if -10 < self.settings['timezone'] < 10:
+                timezone += '0'
+            timezone += str(self.settings['timezone']) + '>' + str(-self.settings['timezone'])
             rtc = RTC()
             rtc.ntp_sync(server='pool.ntp.org', tz=timezone, update_period=3600)
             if not rtc.synced():
