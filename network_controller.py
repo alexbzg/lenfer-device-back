@@ -141,6 +141,8 @@ class NetworkController():
             self._gsm_modem_on = None
             if self._conf['gsm_modem'].get('on'):
                 self._gsm_modem_on = machine.Pin(self._conf['gsm_modem']['on'], machine.Pin.OUT, value=1)
+            if self._conf['gsm_modem'].get('on_rev'):
+                self._gsm_modem_on = machine.Pin(self._conf['gsm_modem']['on_rev'], machine.Pin.OUT, value=0)
             self.gsm = True
             self._gsm_settings = load_json('gsm_settings.json') or {}
             gsm_apns = load_json('gsm_apns.json')
@@ -148,6 +150,9 @@ class NetworkController():
 
             self._gsm_pwr = machine.Pin(self._conf['gsm_modem']['pwr'], machine.Pin.INOUT, value=0)\
                 if self._conf['gsm_modem'].get('pwr') else None
+            if self._gsm_pwr:
+                utime.sleep(2)
+
 
             self._gsm_rst = machine.Pin(self._conf['gsm_modem']['rst'], machine.Pin.OUT, value=1)\
                 if self._conf['gsm_modem'].get('rst') else None

@@ -14,7 +14,7 @@ from http_client import HttpClient
 
 LOG = logging.getLogger("Device")
 
-SERVER_URI = "http://newmy.lenfer.ru/api/"
+SERVER_URI = "http://lenfer.ru/api/"
 SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
