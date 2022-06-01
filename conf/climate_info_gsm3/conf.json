@@ -1,0 +1,48 @@
+{
+    "modules": {
+        "climate": {
+            "enabled": true,
+            "sensor_devices": [
+                {
+                    "type": "ds18x20",
+                    "ow": 0,
+                    "sensors_ids": [21]
+                },                
+                {
+                    "type": "ds18x20",
+                    "ow": 1,
+                    "sensors_ids": [22]
+                },
+                {
+                    "type": "ds18x20",
+                    "ow": 2,
+                    "sensors_ids": [23]
+                }
+            ],
+            "switches": false,
+            "limits": false,
+            "sensors_roles": false,
+            "sensors_titles": {
+                "1": "D0",
+                "2": "D1",
+                "3": "D2"
+            },
+            "sleep": 750
+        }
+    },
+    "sleep": 750,
+    "i2c": [{
+        "scl": 25,
+        "sda": 12
+    }],
+    "ow": [21, 22, 23],
+    "leds": {},
+    "factory_reset": null,
+    "wlan_switch": null,
+    "gsm_modem": {
+        "pwr_key": 27,
+        "tx": 26,
+        "rx": 25,
+        "on_rev": 13
+    }
+}
