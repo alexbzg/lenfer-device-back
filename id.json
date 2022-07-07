@@ -1,8 +1,8 @@
 {
-    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkZXZpY2VfaWQiOjE5fQ.pJLwJJtz2ig-A9XCSb7yD-wi9Lj28dw5vlHuS3z5UeQ",
-    "type": "feeder",
-    "hash": "dPwv0k",
-    "updates": true,
-    "id": 42,
+    "token": "",
+    "type": "gatekeeper_api",
+    "hash": "",
+    "updates": false,
+    "id": 0,
     "disable_software_updates": true
 }

@@ -29,11 +29,33 @@ class RelaySwitchController(LenferController):
             self._schedule_params_idx = [self.device.schedule.param_idx(param) for param in self._schedule_params]
         else:
             self._timers_param = conf.get('timers_param') or 'timers'
-            self.init_timers()
+            if self.device.settings.get(self._timers_param):
+                self.init_timers()
         if self._pulse_length:
             self._on = False
             uasyncio.get_event_loop().create_task(self.pulse_task())
         self._log_prop_name = conf.get('log_prop_name') or self._timers_param
+        self.api = {'on': self.api_on}
+        if conf.get('api_buttons'):
+            self._api_buttons = []
+            for params in conf['api_buttons']:
+                self._api_buttons.append((Pin(params['pin'], Pin.IN, Pin.PULL_UP, handler=self.on_api_button, trigger=Pin.IRQ_FALLING, debounce=500000), params))
+
+    def on_api_button(self, pin):
+        logging.info('on_api_button %s' % pin)
+        api_entry = [i for i in self._api_buttons if i[0] == pin][0][1]
+        self.api[api_entry['api']](**api_entry['args'])
+
+    def api_on(self, value=True, time=1000, manual=True):
+        logging.info('api_on value: %s time: %s manual: %s' % (value, time, manual))
+        self.on(value)
+        if value and time:
+            uasyncio.get_event_loop().create_task(self.delayed_off(time, manual=manual))
+        return value
+
+    async def delayed_off(self, time, manual=True):
+        await uasyncio.sleep_ms(time)
+        self.on(False, manual=manual)
         
     async def pulse_task(self):
         while True:

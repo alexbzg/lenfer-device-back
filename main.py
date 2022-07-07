@@ -1,5 +1,6 @@
 import lib.uasyncio as uasyncio
 import machine
+import re
 import ujson
 import logging
 
@@ -80,6 +81,21 @@ async def get_modules(req, rsp):
 @APP.route('/api/device_hash')
 async def get_device_hash(req, rsp):
     await send_json(rsp, DEVICE.id['hash'])
+
+@APP.route(re.compile('^\/api\/device\/(\w+)\/(\w+)$'))
+async def api(req, rsp):
+    module = req.url_match.group(1)
+    module_api_method = req.url_match.group(2)
+    args = {}
+    if req.method == 'POST':
+        await req.read_json()
+        args = req.json
+    if module in DEVICE.modules:
+        if hasattr(DEVICE.modules[module], 'api') and DEVICE.modules[module].api.get(module_api_method):
+            result = DEVICE.modules[module].api[module_api_method](**args)
+            await send_json(rsp, {'result': result})
+            return
+    await picoweb.http_error(rsp, "404")
 
 try:
     DEVICE.start()

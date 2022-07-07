@@ -14,7 +14,7 @@ from http_client import HttpClient
 
 LOG = logging.getLogger("Device")
 
-SERVER_URI = "http://lenfer.ru/api/"
+SERVER_URI = "http://newmy.lenfer.ru/api/"
 SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
@@ -265,7 +265,7 @@ class LenferDevice:
                 if updates:
                     if updates.get('schedule'):
                         self.schedule.update(updates['schedule'])
-                    if 'props' in updates and updates['props']:
+                    if updates.get('props'):
                         self.settings = updates['props']
                         self.save_settings()
                         for ctrl in self.modules.values():
@@ -438,8 +438,8 @@ class LenferDevice:
             elif module_type == 'feeder':
                 loop.create_task(self.modules['feeder'].check_timers())
         if self.online():
-            loop.create_task(self.post_log())
             if self.id.get('updates'):
+                loop.create_task(self.post_log())
                 loop.create_task(self.check_updates())
             if not self.id.get('disable_software_updates'):
                 loop.create_task(self.task_check_software_updates())
