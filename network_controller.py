@@ -31,6 +31,8 @@ class WlanController:
                 self.nic.active(True)
                 self.nic.connect(self.conf['ssid'], self.conf['key'])
                 utime.sleep(10)
+                if self.conf.get('ssid_conf'):
+                    self.nic.ifconfig(self.conf['ssid_conf'])
                 self.host = self.nic.ifconfig()[0]
             except Exception as exc:
                 LOG.exc(exc, 'WLAN connect error')
