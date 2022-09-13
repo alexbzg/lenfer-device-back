@@ -19,7 +19,7 @@ SERVER_URI_DEV = "http://dev-api.lenfer.ru/api/"
 
 class LenferDevice:
 
-    MODULES_LIST = ["rtc", "climate", "relays", "power_monitor", "feeder"]
+    MODULES_TYPES = ["rtc", "climate", "relays", "power_monitor", "feeder"]
 
     def module_enabled(self, module_conf):
         if 'enabled' in module_conf and not module_conf['enabled']:
@@ -86,73 +86,39 @@ class LenferDevice:
         manage_memory()
         machine.resetWDT()
 
-        if 'rtc' in self._conf['modules'] and self.module_enabled(self._conf['modules']['rtc']):
-            try:
-                from timers import RtcController
-                self.modules['rtc'] = RtcController(self, self._conf['modules']['rtc'])
-                self.modules['rtc'].get_time(set_rtc=True)
-                LOG.info('RTC init')
-
-            except Exception as exc:
-                LOG.exc(exc, 'RTC initialization error')
-            machine.resetWDT()
-            manage_memory()
-        if 'climate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['climate']):
-            try:
-                from climate import ClimateController
-                self.modules['climate'] = ClimateController(self, self._conf['modules']['climate'])
-                LOG.info('ClimateController init')
-
-            except Exception as exc:
-                LOG.exc(exc, 'Climate initialization error')
-                if self._conf['modules']['climate'].get('obligatory'):
-                    LOG.error('Obligatory module initialization fail -- machine reset')
-                    machine.reset()
-            machine.resetWDT()
-            manage_memory()
-        if 'power_monitor' in self._conf['modules'] and self.module_enabled(self._conf['modules']['power_monitor']):
-            try:
-                from power_monitor_controller import PowerMonitor
-                self.modules['power_monitor'] = PowerMonitor(self, self._conf['modules']['power_monitor'])
-                LOG.info('PowerMonitor init')
-
-            except Exception as exc:
-                LOG.exc(exc, 'PowerMonitor initialization error')
-                if self._conf['modules']['power_monitor'].get('obligatory'):
-                    LOG.error('Obligatory module initialization fail -- machine reset')
-                    machine.reset()
-            machine.resetWDT()
-            manage_memory()
-
-        if 'feeder' in self._conf['modules'] and self.module_enabled(self._conf['modules']['feeder']):
-            try:
-                from feeder import FeederController
-                self.modules['feeder'] = FeederController(self, self._conf['modules']['feeder'])
-                LOG.info('Feeder init')
-            except Exception as exc:
-                LOG.exc(exc, 'Feeder initialization error')
-            machine.resetWDT()
-            manage_memory()
-
-        if 'gate' in self._conf['modules'] and self.module_enabled(self._conf['modules']['gate']):
-            try:
-                from gate_controller import GateController
-                self.modules['gate'] = GateController(self, self._conf['modules']['gate'])
-                LOG.info('Gate init')
-            except Exception as exc:
-                LOG.exc(exc, 'Gate initialization error')
-            machine.resetWDT()
-            manage_memory()
-
-        if 'relay_switch' in self._conf['modules'] and self.module_enabled(self._conf['modules']['relay_switch']):
-            try:
-                from relay_switch import RelaySwitchController
-                self.modules['relay_switch'] = RelaySwitchController(self, self._conf['modules']['relay_switch'])
-                LOG.info('Relay init')
-            except Exception as exc:
-                LOG.exc(exc, 'RelaySwitch initialization error')
-            machine.resetWDT()
-            manage_memory()
+        for module_conf in self._conf['modules']:
+            if module_conf.get('enabled') and module_conf.get('type'):
+                module, module_type = None, module_conf['type']
+                try:
+                    if module_type == 'rtc':
+                        from timers import RtcController
+                        module = RtcController(self, module_conf)
+                        module.get_time(set_rtc=True)
+                    elif module_type == 'climate':
+                        from climate import ClimateController
+                        module = ClimateController(self, module_conf)
+                    elif module_type == 'power_monitor':
+                        from power_monitor_controller import PowerMonitor
+                        module = PowerMonitor(self, module_conf)
+                    elif module_type == 'feeder':
+                        from feeder import FeederController
+                        module = FeederController(self, module_conf)
+                    elif module_type == 'gate':
+                        from gate_controller import GateController
+                        module = GateController(self, module_conf)
+                    elif module_type == 'relay_switch':
+                        from relay_switch import RelaySwitchController
+                        module = RelaySwitchController(self, module_conf)
+                except Exception as exc:
+                    LOG.exc(exc, module_type + ' initialization error')
+                    if module_conf.get('obligatory'):
+                        LOG.error('Obligatory module initialization fail -- machine reset')
+                        machine.reset()
+                if module_type not in self.modules:
+                    self.modules[module_type] = []
+                self.modules[module_type].append(module)
+                machine.resetWDT()
+                manage_memory()
 
         LOG.info(self.modules)
 
@@ -268,8 +234,8 @@ class LenferDevice:
                     if updates.get('props'):
                         self.settings = updates['props']
                         self.save_settings()
-                        for ctrl in self.modules.values():
-                            if ctrl:
+                        for ctrl_type in self.modules.values():
+                            for ctrl in ctrl_type:
                                 ctrl.update_settings()
                     if deepsleep != bool(self.deepsleep()):
                         machine.reset()           
@@ -291,27 +257,30 @@ class LenferDevice:
             try:
                 data = {'data': []}
                 tstamp = self.post_tstamp()
-                for ctrl in self.modules.values():                   
-                    if ctrl and hasattr(ctrl, 'data_log'):
-                        data['data'] += [{'sensor_id': entry[0], 'tstamp': entry[1], 'value': entry[2]}\
-                            for entry in ctrl.data_log]
-                    elif ctrl and hasattr(ctrl, 'data'):
-                        data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
-                            for _id, value in ctrl.data.items()]
+                for ctrl_type in self.modules.values():
+                    for ctrl in ctrl_type:
+                        if hasattr(ctrl, 'data_log'):
+                            data['data'] += [{'sensor_id': entry[0], 'tstamp': entry[1], 'value': entry[2]}\
+                                for entry in ctrl.data_log]
+                        elif hasattr(ctrl, 'data'):
+                            data['data'] += [{'sensor_id': _id, 'tstamp': tstamp, 'value': value}\
+                                for _id, value in ctrl.data.items()]
                 if data['data']:
                     rsp = await self.srv_post('sensors_data', data, retry=once)
                     if once and not rsp:
                         machine.reset()
                     if rsp:
-                        for ctrl in self.modules.values():                   
-                            if ctrl and hasattr(ctrl, 'data_log'):
-                                ctrl.data_log = []
+                        for ctrl_type in self.modules.values():                  
+                            for ctrl in ctrl_type:
+                                if hasattr(ctrl, 'data_log'):
+                                    ctrl.data_log = []
                 data = {'data': []}
                 tstamp = self.post_tstamp()
-                for ctrl in self.modules.values():
-                    if ctrl and hasattr(ctrl, 'switches'):
-                        data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
-                            for switch in ctrl.switches.values() if switch['enabled']]
+                for ctrl_type in self.modules.values():
+                    for ctrl in ctrl_type:
+                        if hasattr(ctrl, 'switches'):
+                            data['data'] += [{'device_type_switch_id': switch['id'], 'tstamp': tstamp, 'state': switch['pin'].value() == 1}\
+                                for switch in ctrl.switches.values() if switch['enabled']]
                 if data['data']:
                     await self.srv_post('switches_state', data, retry=once)
             except Exception as exc:
@@ -336,7 +305,6 @@ class LenferDevice:
             except Exception as exc:
                 LOG.exc(exc, 'Server log post error')
             manage_memory()
-
 
     def post_tstamp(self, time_tuple=None):
         if not time_tuple:
@@ -391,30 +359,32 @@ class LenferDevice:
         self.ntp_sync()
         if self.deepsleep():
             loop = uasyncio.get_event_loop()
-            for module_type in self.modules:
+            for module_type, modules in self.modules.items():
                 if module_type == 'rtc':
-                    loop.run_until_complete(self.modules['rtc'].adjust_time(once=True))
+                    loop.run_until_complete(modules[0].adjust_time(once=True))
                     machine.resetWDT()
                 elif module_type == 'climate':
-                    loop.run_until_complete(self.modules['climate'].read(once=True))
-                    machine.resetWDT()
+                    for module in modules:
+                        loop.run_until_complete(module.read(once=True))
+                        machine.resetWDT()
+                        if module.light:
+                            loop.run_until_complete(module.adjust_light(once=True))                
+                            machine.resetWDT()
                     if self.online():
                         loop.run_until_complete(self.post_sensor_data(once=True))
                         machine.resetWDT()
-                    if self.modules['climate'].light:
-                        loop.run_until_complete(self.modules['climate'].adjust_light(once=True))                
-                        machine.resetWDT()
-                if self.online():
-                    if self.id.get('updates'):
-                        loop.run_until_complete(self.check_updates(once=True))
-                        machine.resetWDT()
-                    if not self.id.get('disable_software_updates'):
-                        loop.run_until_complete(self.task_check_software_updates(once=True))
-                        machine.resetWDT()
-                if self.deepsleep():
-                    if self._network:
-                        self._network.off()
-                    machine.deepsleep(self.deepsleep()*60000)
+                            
+            if self.online():
+                if self.id.get('updates'):
+                    loop.run_until_complete(self.check_updates(once=True))
+                    machine.resetWDT()
+                if not self.id.get('disable_software_updates'):
+                    loop.run_until_complete(self.task_check_software_updates(once=True))
+                    machine.resetWDT()
+            if self.deepsleep():
+                if self._network:
+                    self._network.off()
+                machine.deepsleep(self.deepsleep()*60000)
                 
         self.start_async()
 
@@ -424,19 +394,20 @@ class LenferDevice:
         loop.create_task(self.check_wlan_switch())
         if self._network._wlan and (self._network._wlan.mode == AP_IF and self._network._wlan.conf['ssid']):
             loop.create_task(self.delayed_ssid_switch())
-        for module_type in self.modules:
-            if module_type == 'climate' or module_type == 'power_monitor':
-                loop.create_task(self.modules[module_type].read())
+        for module_type, modules in self.modules.items():
+            if module_type in ('climate', 'power_monitor'):
+                for module in modules:
+                    loop.create_task(module.read())
                 if self.online():
                     loop.create_task(self.post_sensor_data())
-            elif module_type =='relay_switch':
-                loop.create_task(self.modules['relay_switch'].adjust_switch())                
-            elif module_type =='gate':
-                loop.create_task(self.modules['gate'].adjust_switch())                
+            elif module_type in ('relay_switch', 'gate'):
+                for module in modules:
+                    loop.create_task(module.adjust_switch())                
             elif module_type == 'rtc':
-                loop.create_task(self.modules['rtc'].adjust_time())
+                loop.create_task(modules[0].adjust_time())
             elif module_type == 'feeder':
-                loop.create_task(self.modules['feeder'].check_timers())
+                for module in modules:
+                    loop.create_task(module.check_timers())
         if self.online():
             if self.id.get('updates'):
                 loop.create_task(self.post_log())

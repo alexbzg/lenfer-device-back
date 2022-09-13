@@ -15,7 +15,7 @@ LOG = logging.getLogger("Relay")
 class RelaySwitchController(LenferController):
 
     def __init__(self, device, conf):
-        LenferController.__init__(self, device)
+        LenferController.__init__(self, device, conf)
         self._conf = conf
         self.pin = Pin(conf['pin'], Pin.INOUT)
         self.pin.value(0)
@@ -48,7 +48,7 @@ class RelaySwitchController(LenferController):
 
     def api_on(self, value=True, time=1000, manual=True):
         logging.info('api_on value: %s time: %s manual: %s' % (value, time, manual))
-        self.on(value)
+        self.on(value, manual=manual)
         if value and time:
             uasyncio.get_event_loop().create_task(self.delayed_off(time, manual=manual))
         return value

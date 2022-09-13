@@ -1,8 +1,25 @@
 {
-    "modules": {
-        "relay_switch": {
+    "modules": [
+        {
+            "type": "relay_switch",
             "enabled": true,
-            "pin": 22,
+            "pin": 17,
+            "name": "gate",
+            "timers_param": "gate",
+            "api_buttons": [
+                {
+                    "pin": 14,
+                    "api": "on",
+                    "args": {}
+                }
+            ]
+        },
+        {
+            "type": "relay_switch",
+            "enabled": true,
+            "pin": 23,
+            "name": "door",
+            "timers_param": "door",
             "api_buttons": [
                 {
                     "pin": 16,
@@ -11,7 +28,8 @@
                 }
             ]
         }
-    },
+
+    ],
     "sleep": 750,
     "i2c": [{
         "scl": 32,

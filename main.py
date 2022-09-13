@@ -76,23 +76,26 @@ async def get_index(req, rsp):
 
 @APP.route('/api/modules')
 async def get_modules(req, rsp):
-    await send_json(rsp, {key: bool(value) for key, value in DEVICE.modules.items()})
+    await send_json(rsp, 
+        {module_type: [module.name if module.name else idx for idx, module in enumerate(modules)] for module_type, modules in DEVICE.modules.items()})
 
 @APP.route('/api/device_hash')
 async def get_device_hash(req, rsp):
     await send_json(rsp, DEVICE.id['hash'])
 
-@APP.route(re.compile('^\/api\/device\/(\w+)\/(\w+)$'))
+@APP.route(re.compile('^\/api\/device\/(\w+)\/(\w+)\/(\w+)$'))
 async def api(req, rsp):
-    module = req.url_match.group(1)
-    module_api_method = req.url_match.group(2)
+    module_type = req.url_match.group(1)
+    module_id = int(req.url_match.group(2))
+    module_api_method = req.url_match.group(3)
     args = {}
     if req.method == 'POST':
         await req.read_json()
         args = req.json
-    if module in DEVICE.modules:
-        if hasattr(DEVICE.modules[module], 'api') and DEVICE.modules[module].api.get(module_api_method):
-            result = DEVICE.modules[module].api[module_api_method](**args)
+    if module_type in DEVICE.modules and len(DEVICE.modules[module_type]) > module_id:
+        module = DEVICE.modules[module_type][module_id]
+        if hasattr(module, 'api') and module.api.get(module_api_method):
+            result = module.api[module_api_method](**args)
             await send_json(rsp, {'result': result})
             return
     await picoweb.http_error(rsp, "404")
