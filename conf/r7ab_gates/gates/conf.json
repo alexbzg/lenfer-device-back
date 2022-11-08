@@ -1,0 +1,72 @@
+{
+    "modules": [
+        {
+            "type": "relay_switch",
+            "enabled": true,
+            "pin": 22,
+            "name": "gate",
+            "timers_param": "gate",
+            "api_buttons": [
+                {
+                    "pin": 16,
+                    "irq": {
+                        "0": {
+                            "api": "on",
+                            "args": {}
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "relay_switch",
+            "enabled": true,
+            "pin": 19,
+            "name": "door",
+            "timers_param": "door",
+            "api_buttons": [
+                {
+                    "pin": 4,
+                    "irq": {
+                        "0": {
+                            "api": "on",
+                            "args": {}
+                        }
+                    }
+                },
+                {
+                    "pin": 18,
+                    "irq": {
+                        "0": {
+                            "api": "http_post",
+                            "args": {
+                                "url": "http://192.168.1.13/api/device/relay_switch/0/on", 
+                                "data": {"value": 1, "time": null}
+                            }
+                        },
+                        "1": {
+                            "api": "http_post",
+                            "args": {
+                                "url": "http://192.168.1.13/api/device/relay_switch/0/on", 
+                                "data": {"value": 0}
+                            }
+                        }
+                    }
+                }
+
+            ]
+        }
+
+    ],
+    "sleep": 750,
+    "i2c": [{
+        "scl": 32,
+        "sda": 33
+    }],
+    "ow": [],
+    "leds": {
+        "status": 13
+    },
+    "factory_reset": 26,
+    "wlan_switch": 27
+}

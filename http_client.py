@@ -5,7 +5,7 @@ import utime
 import lib.uasyncio as uasyncio
 import machine
 
-from utils import load_json
+from utils import manage_memory
 
 LOG = logging.getLogger("Main")
 
@@ -88,7 +88,7 @@ class HttpClient:
             self.log_exception(exc, url, data)
         finally:
             self._srv_req_pending = False
-            machine.resetWDT()
+            manage_memory()
         if rsp:
             try:
                 result = ujson.load(rsp.raw)

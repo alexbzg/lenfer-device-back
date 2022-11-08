@@ -30,7 +30,6 @@ class LenferDevice:
 
     def save_settings(self):
         save_json(self.settings, 'settings.json')
-        self.status["ssid_delay"] = True
 
     def load_def_settings(self):
         self.settings = load_json('settings_default.json')
@@ -151,11 +150,8 @@ class LenferDevice:
     async def delayed_ssid_switch(self):
         LOG.info("delayed wlan switch activated")
         while True:
-            await uasyncio.sleep(300)
-            if self.status["ssid_delay"]:
-                self.status["ssid_delay"] = False
-            else:
-                self._network._wlan.enable_ssid(True)
+            await uasyncio.sleep(120)
+            self._network._wlan.enable_ssid(True)
 
     def factory_reset_irq(self, pin):
         LOG.info("factory reset irq %s" % pin.value())
@@ -182,17 +178,18 @@ class LenferDevice:
             self._network._wlan.load_def_conf()
         machine.reset()
 
-    async def blink(self, leds, count, time_ms):
+    async def blink(self, leds, count=1, time_ms=0, off=False):
         for co in range(count):
             for led in leds:
                 if led in self.leds:
-                    self.leds[led].value(1)
-            await uasyncio.sleep_ms(time_ms)
-            for led in leds:
-                if led in self.leds:
-                    self.leds[led].value(0)
-            if co < count - 1:
+                    self.leds[led].value(0 if off else 1)
+            if time_ms:
                 await uasyncio.sleep_ms(time_ms)
+                for led in leds:
+                    if led in self.leds:
+                        self.leds[led].value(0)
+                if co < count - 1:
+                    await uasyncio.sleep_ms(time_ms)
 
     async def bg_leds(self):
         while True:

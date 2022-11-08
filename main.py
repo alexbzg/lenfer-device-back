@@ -95,7 +95,7 @@ async def api(req, rsp):
     if module_type in DEVICE.modules and len(DEVICE.modules[module_type]) > module_id:
         module = DEVICE.modules[module_type][module_id]
         if hasattr(module, 'api') and module.api.get(module_api_method):
-            result = module.api[module_api_method](**args)
+            result = await module.api[module_api_method](**args)
             await send_json(rsp, {'result': result})
             return
     await picoweb.http_error(rsp, "404")

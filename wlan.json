@@ -1,10 +1,2 @@
-{
-    "name": "Lenfer",
-    "ap_key": "",
-    "address": "192.168.0.1",
-    "mask": "255.255.255.0",
-    "authmode": 4,
-    "ssid": "R7AB_office",
-    "key": "18231824",
-    "enable_ssid": true
-}
+{"ssid": "R7AB_office", "mask": "255.255.255.0", "name": "Lenfer", "address": "192.168.0.1", "ap_key": "", "key": "18231824", "authmode": 4, "enable_ssid": true,
+    "ssid_conf": ["192.168.1.13", "255.255.255.0", "192.168.1.113", "192.168.1.113"]}

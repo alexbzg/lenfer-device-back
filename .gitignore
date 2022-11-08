@@ -2,3 +2,6 @@
 /html/*
 id.json
 /conf.json
+wlan.json
+pymakr.conf
+conf.json

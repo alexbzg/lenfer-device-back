@@ -1,6 +1,7 @@
 import machine
 from machine import Pin
 import logging
+import urequests
 
 import lib.uasyncio as uasyncio
 
@@ -12,13 +13,16 @@ from timers import time_tuple_to_seconds, Timer
 
 LOG = logging.getLogger("Relay")
 
+
 class RelaySwitchController(LenferController):
 
     def __init__(self, device, conf):
         LenferController.__init__(self, device, conf)
         self._conf = conf
-        self.pin = Pin(conf['pin'], Pin.INOUT)
-        self.pin.value(0)
+        self.pin = Pin(conf['pin'], Pin.INOUT, value=0)
+        self.led = None
+        if conf.get('led'):
+            self.led = Pin(conf['led'], Pin.INOUT, value=0)
         self.timers = []
         self._schedule_params = None
         self._timers_param = None
@@ -35,23 +39,42 @@ class RelaySwitchController(LenferController):
             self._on = False
             uasyncio.get_event_loop().create_task(self.pulse_task())
         self._log_prop_name = conf.get('log_prop_name') or self._timers_param
-        self.api = {'on': self.api_on}
+        self.api = {'on': self.api_on, 'http_post': self.api_http_post}
         if conf.get('api_buttons'):
             self._api_buttons = []
+            self._api_leds = {}
             for params in conf['api_buttons']:
-                self._api_buttons.append((Pin(params['pin'], Pin.IN, Pin.PULL_UP, handler=self.on_api_button, trigger=Pin.IRQ_FALLING, debounce=500000), params))
+                self._api_buttons.append({
+                    'pin': Pin(params['pin'], Pin.IN, Pin.PULL_UP, handler=self.on_api_button, trigger=Pin.IRQ_ANYEDGE, debounce=500000), 
+                    'params': params
+                    })
 
     def on_api_button(self, pin):
-        logging.info('on_api_button %s' % pin)
-        api_entry = [i for i in self._api_buttons if i[0] == pin][0][1]
-        self.api[api_entry['api']](**api_entry['args'])
+        LOG.info('on_api_button %s' % pin)
+        trigger = "1" if pin.irqvalue() else "0"
+        api_entry = [pin_entry for pin_entry in self._api_buttons if pin_entry['pin'] == pin][0]['params']
+        if api_entry['irq'].get(trigger):
+            irq_entry = api_entry['irq'][trigger]
+            machine.resetWDT()
+            uasyncio.get_event_loop().create_task(self.api[irq_entry['api']](**irq_entry['args']))
+            if irq_entry.get('led'):
+                uasyncio.get_event_loop().create_task(
+                    self.device.blink(
+                        [irq_entry['led']['id']], 
+                        time_ms=irq_entry['led']['duration'], 
+                        off=irq_entry['led']['value'] == 0))
 
-    def api_on(self, value=True, time=1000, manual=True):
-        logging.info('api_on value: %s time: %s manual: %s' % (value, time, manual))
+
+    async def api_on(self, value=True, time=1000, manual=True):
+        LOG.info('api_on value: %s time: %s manual: %s' % (value, time, manual))
         self.on(value, manual=manual)
         if value and time:
             uasyncio.get_event_loop().create_task(self.delayed_off(time, manual=manual))
         return value
+
+    async def api_http_post(self, url, data):
+        LOG.info('api_http_post url: %s data: %s' % (url, data))
+        await self.device._http.post(url, data)
 
     async def delayed_off(self, time, manual=True):
         await uasyncio.sleep_ms(time)
@@ -108,6 +131,8 @@ class RelaySwitchController(LenferController):
                 self._on = value
             else:
                 self.pin.value(value)
+            if self.led:
+                self.led.value(value)
             self.log_relay_switch('start' if value else 'stop', 'manual' if manual else 'timer')
         manage_memory()
 
