@@ -14,7 +14,7 @@
                         "0": {
                             "api": "http_post",
                             "args": {
-                                "url": "http://192.168.1.14/api/device/relay_switch/0/on", 
+                                "url": "http://192.168.1.96:8080/api/device/relay_switch/0/on",
                                 "data": {"value": 1}
                             },
                             "led": {
@@ -31,7 +31,7 @@
                         "0": {
                             "api": "http_post",
                             "args": {
-                                "url": "http://192.168.1.14/api/device/relay_switch/1/on", 
+                                "url": "http://192.168.1.96:8080/api/device/relay_switch/1/on",
                                 "data": {"value": 1}
                             },
                             "led": {

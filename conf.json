@@ -3,45 +3,57 @@
         {
             "type": "relay_switch",
             "enabled": true,
-            "pin": 21,
-            "led": 17,
-            "name": "alarm",
-            "timers_param": "alarm",
+            "pin": 22,
+            "name": "gate",
+            "timers_param": "gate",
             "api_buttons": [
                 {
-                    "pin": 19,
+                    "pin": 16,
                     "irq": {
                         "0": {
-                            "api": "http_post",
-                            "args": {
-                                "url": "http://192.168.1.14/api/device/relay_switch/0/on", 
-                                "data": {"value": 1}
-                            },
-                            "led": {
-                                "id": "gates_button",
-                                "value": 1,
-                                "duration": 1000
-                            }
+                            "api": "on",
+                            "args": {}
                         }
                     }
-                },
+                }
+            ]
+        },
+        {
+            "type": "relay_switch",
+            "enabled": true,
+            "pin": 19,
+            "name": "door",
+            "timers_param": "door",
+            "api_buttons": [
                 {
                     "pin": 4,
                     "irq": {
                         "0": {
+                            "api": "on",
+                            "args": {}
+                        }
+                    }
+                },
+                {
+                    "pin": 18,
+                    "irq": {
+                        "0": {
                             "api": "http_post",
                             "args": {
-                                "url": "http://192.168.1.14/api/device/relay_switch/1/on", 
-                                "data": {"value": 1}
-                            },
-                            "led": {
-                                "id": "door_button",
-                                "value": 1,
-                                "duration": 1000
+                                "url": "http://192.168.1.97:8080/api/device/relay_switch/0/on",
+                                "data": {"value": 1, "time": null}
+                            }
+                        },
+                        "1": {
+                            "api": "http_post",
+                            "args": {
+                                "url": "http://192.168.1.97:8080/api/device/relay_switch/0/on",
+                                "data": {"value": 0}
                             }
                         }
                     }
                 }
+
             ]
         }
 
@@ -53,9 +65,7 @@
     }],
     "ow": [],
     "leds": {
-        "status": 13,
-        "gates_button": 18,
-        "door_button": 16
+        "status": 13
     },
     "factory_reset": 26,
     "wlan_switch": 27

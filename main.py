@@ -76,7 +76,8 @@ async def get_index(req, rsp):
 
 @APP.route('/api/modules')
 async def get_modules(req, rsp):
-    await send_json(rsp, 
+    pin_no = int(module_type = req.url_match.group(1))
+    await send_json(rsp, machine.Pin(pin_no, )
         {module_type: [module.name if module.name else idx for idx, module in enumerate(modules)] for module_type, modules in DEVICE.modules.items()})
 
 @APP.route('/api/device_hash')
@@ -94,9 +95,14 @@ async def api(req, rsp):
         args = req.json
     if module_type in DEVICE.modules and len(DEVICE.modules[module_type]) > module_id:
         module = DEVICE.modules[module_type][module_id]
-        if hasattr(module, 'api') and module.api.get(module_api_method):
+        result = None
+        if module_api_method == 'state' and hasattr(module, 'state'):
+            result = {'state': module.state}
+        elif hasattr(module, 'api') and module.api.get(module_api_method):
             result = await module.api[module_api_method](**args)
-            await send_json(rsp, {'result': result})
+            result = {'result': result}
+        if result:
+            await send_json(rsp, result)
             return
     await picoweb.http_error(rsp, "404")
 

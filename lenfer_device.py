@@ -338,6 +338,7 @@ class LenferDevice:
             if -10 < self.settings['timezone'] < 10:
                 timezone += '0'
             timezone += str(self.settings['timezone']) + '>' + str(-self.settings['timezone'])
+            LOG.info("Timezone: %s" % timezone)
             rtc = RTC()
             rtc.ntp_sync(server='pool.ntp.org', tz=timezone, update_period=3600)
             if not rtc.synced():
